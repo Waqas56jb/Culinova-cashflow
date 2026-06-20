@@ -2,6 +2,8 @@ import { NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   FiGrid,
+  FiZap,
+  FiShoppingCart,
   FiUsers,
   FiList,
   FiTrendingUp,
@@ -25,6 +27,13 @@ const groups = [
       { to: '/users', icon: FiUsers, key: 'nav.users' },
       { to: '/audit', icon: FiList, key: 'nav.audit' },
       { to: '/settings', icon: FiSettings, key: 'nav.settings' },
+    ],
+  },
+  {
+    title: 'Decision Support',
+    items: [
+      { to: '/action-center', icon: FiZap, key: 'nav.actionCenter' },
+      { to: '/decision', icon: FiShoppingCart, key: 'nav.decision' },
     ],
   },
   {

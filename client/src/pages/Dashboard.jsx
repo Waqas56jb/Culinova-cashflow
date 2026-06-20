@@ -30,6 +30,13 @@ import { useApp } from '../context/AppContext.jsx';
 import { money, num, fmtDate, convert } from '../utils/format.js';
 import KpiCard from '../components/KpiCard.jsx';
 
+const CommitTile = ({ label, value, tone }) => (
+  <div className="rounded-xl border border-slate-100 p-4">
+    <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{label}</div>
+    <div className={`text-xl font-extrabold ${tone}`}>{value}</div>
+  </div>
+);
+
 const statusTone = { Green: 'green', Yellow: 'amber', Red: 'red', Critical: 'red' };
 const statusColor = { Green: '#10b981', Yellow: '#f59e0b', Red: '#f97316', Critical: '#ef4444' };
 
@@ -37,6 +44,7 @@ export default function Dashboard() {
   const { t, i18n } = useTranslation();
   const { displayCurrency, rates } = useApp();
   const [data, setData] = useState(null);
+  const [commit, setCommit] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -45,6 +53,7 @@ export default function Dashboard() {
       .then((r) => setData(r.data))
       .catch(() => {})
       .finally(() => setLoading(false));
+    api.get('/analytics/commitments').then((r) => setCommit(r.data)).catch(() => {});
   }, []);
 
   if (loading) return <div className="text-slate-400 py-20 text-center">{t('common.loading')}</div>;
@@ -101,6 +110,32 @@ export default function Dashboard() {
         <KpiCard icon={FiTrendingDown} tone="red" label={t('kpi.minClosing')} value={m(d.min_closing_13w)} />
         <KpiCard icon={FiAlertTriangle} tone="slate" label={t('kpi.criticalWeek')} value={fmtDate(d.critical_week, i18n.language)} />
       </div>
+
+      {/* Available vs Committed cash */}
+      {commit && (
+        <div className="card p-5">
+          <h3 className="font-bold text-ink mb-4">Available Cash vs Committed Cash</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <CommitTile label="Available (Bank)" value={m(commit.available_cash)} tone="text-emerald-600" />
+            <CommitTile label="Committed (unpaid)" value={m(commit.committed_total)} tone="text-orange-600" />
+            <CommitTile
+              label="Free to Spend"
+              value={m(commit.free_to_spend)}
+              tone={commit.free_to_spend < 0 ? 'text-red-600' : 'text-emerald-600'}
+            />
+            <CommitTile
+              label="Reserve to Keep"
+              value={m(commit.min_operating_cash)}
+              tone="text-slate-600"
+            />
+          </div>
+          {commit.free_to_spend < 0 && (
+            <div className="mt-3 text-sm bg-red-50 text-red-700 rounded-lg px-3 py-2">
+              ⚠️ Commitments exceed available cash after reserve — avoid new purchases until collections arrive.
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Alerts */}
       {alerts.length > 0 && (

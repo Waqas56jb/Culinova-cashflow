@@ -6,6 +6,8 @@ const en = {
   app: 'CULINOVA — Cash Flow CFO',
   nav: {
     dashboard: 'Dashboard',
+    actionCenter: 'Action Center',
+    decision: 'Procurement Decision',
     forecast: '13-Week Forecast',
     projects: 'Projects',
     collections: 'Collections',
@@ -68,6 +70,8 @@ const ar = {
   app: 'كولينوفا — التدفق النقدي',
   nav: {
     dashboard: 'لوحة التحكم',
+    actionCenter: 'مركز الإجراءات',
+    decision: 'قرار الشراء',
     forecast: 'توقعات 13 أسبوع',
     projects: 'المشاريع',
     collections: 'التحصيلات',

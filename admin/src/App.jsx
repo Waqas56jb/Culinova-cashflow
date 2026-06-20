@@ -5,6 +5,8 @@ import ResourcePage from './components/ResourcePage.jsx';
 import { RESOURCES } from './resources.js';
 import Login from './pages/Login.jsx';
 import Dashboard from './pages/Dashboard.jsx';
+import ActionCenter from './pages/ActionCenter.jsx';
+import Decision from './pages/Decision.jsx';
 import Forecast from './pages/Forecast.jsx';
 import Reserve from './pages/Reserve.jsx';
 import Scenario from './pages/Scenario.jsx';
@@ -43,6 +45,8 @@ export default function App() {
         }
       >
         <Route index element={<Dashboard />} />
+        <Route path="action-center" element={<ActionCenter />} />
+        <Route path="decision" element={<Decision />} />
         <Route path="users" element={<Users />} />
         <Route path="audit" element={<Audit />} />
         <Route path="forecast" element={<Forecast />} />

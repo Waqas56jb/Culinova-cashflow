@@ -9,7 +9,7 @@ export default function Login() {
   const { t, i18n } = useTranslation();
   const { login } = useApp();
   const nav = useNavigate();
-  const [email, setEmail] = useState('admin@gmail.com');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -92,10 +92,6 @@ export default function Login() {
           <button className="btn-primary w-full" disabled={busy}>
             {busy ? '…' : t('common.signIn')}
           </button>
-
-          <p className="text-xs text-slate-400 mt-4 text-center">
-            Default admin: admin@gmail.com / admin@123!
-          </p>
         </form>
       </div>
     </div>

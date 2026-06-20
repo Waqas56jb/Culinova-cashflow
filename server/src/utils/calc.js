@@ -16,10 +16,24 @@ export function startOfDay(d) {
 export function addDays(d, n) {
   return new Date(startOfDay(d).getTime() + n * DAY);
 }
+// Parse a date deterministically as a LOCAL calendar day, so date bucketing
+// is identical whether the server runs in UTC (Vercel) or any other timezone.
 export function parseDate(v) {
   if (!v) return null;
+  if (typeof v === 'string') {
+    const m = v.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  }
   const d = new Date(v);
   return isNaN(d) ? null : startOfDay(d);
+}
+
+// Format a Date as local YYYY-MM-DD (never via toISOString, which shifts to UTC).
+export function ymd(d) {
+  const x = new Date(d);
+  const mm = String(x.getMonth() + 1).padStart(2, '0');
+  const dd = String(x.getDate()).padStart(2, '0');
+  return `${x.getFullYear()}-${mm}-${dd}`;
 }
 // Monday of the week containing `d`
 export function startOfWeek(d) {
@@ -152,7 +166,7 @@ export function computeForecast({
 
     weekRows.push({
       index: i + 1,
-      week_start: ws.toISOString().slice(0, 10),
+      week_start: ymd(ws),
       opening: round2(opening),
       inflows: round2(inflows),
       outflows: round2(outflows),
@@ -288,4 +302,216 @@ export function round2(n) {
 }
 export function round4(n) {
   return Math.round((Number(n) + Number.EPSILON) * 10000) / 10000;
+}
+
+/* ============================================================
+   DECISION-SUPPORT / AUTOMATION LAYER
+   These turn the raw forecast into management decisions:
+   "what to buy, when to buy, when to collect, when to delay".
+   ============================================================ */
+
+/* ---- Available cash vs Committed cash ----
+   Available  = liquid cash in bank right now.
+   Committed  = payments already owed but not yet paid (commitments).
+   Free       = what is genuinely safe to spend after commitments + reserve. */
+export function computeCommitments({ settings, reserve, payments, collections, rates }) {
+  const base = settings?.base_currency || 'SAR';
+  const today = startOfDay(new Date());
+  const in30 = addDays(today, 30);
+  const bank = Number(settings?.current_bank_balance) || 0;
+  const minOperating = Number(reserve?.min_operating_cash) || 0;
+
+  const unpaid = payments.filter((p) => !p.paid);
+  const committedTotal = unpaid.reduce((a, p) => a + toBase(p.amount, p.currency, rates, base), 0);
+  const committed30 = unpaid.reduce((a, p) => {
+    const d = parseDate(p.due_date);
+    return d && d >= today && d <= in30 ? a + toBase(p.amount, p.currency, rates, base) : a;
+  }, 0);
+  const expectedColl30 = collections.reduce((a, c) => {
+    const d = parseDate(c.expected_date);
+    return d && d >= today && d <= in30 ? a + toBase(c.amount, c.currency, rates, base) : a;
+  }, 0);
+
+  // Free cash = bank - near-term commitments - the reserve we must keep
+  const uncommitted = bank - committed30;
+  const freeToSpend = bank - committed30 - minOperating;
+
+  return {
+    available_cash: round2(bank),
+    committed_total: round2(committedTotal),
+    committed_30d: round2(committed30),
+    expected_collections_30d: round2(expectedColl30),
+    min_operating_cash: round2(minOperating),
+    uncommitted_cash: round2(uncommitted),
+    free_to_spend: round2(freeToSpend),
+    coverage_ratio: committed30 ? round2((bank + expectedColl30) / committed30) : null,
+  };
+}
+
+/* ---- Cash-impact simulation for a proposed purchase order ----
+   Re-runs the forecast WITH a hypothetical payment and reports the
+   damage + a clear procurement recommendation. */
+export function simulatePurchase({ settings, reserve, collections, payments, rates, po }) {
+  const amount = Number(po?.amount) || 0;
+  const date = po?.due_date;
+  const weeks = Number(po?.weeks) || 13;
+  const minOperating = Number(reserve?.min_operating_cash) || 0;
+  const redLine = Number(settings?.status_red ?? 100000);
+
+  const before = computeForecast({ settings, collections, payments, rates, weeks });
+  const synthetic = { amount, currency: settings?.base_currency || 'SAR', due_date: date, paid: false };
+  const after = computeForecast({
+    settings,
+    collections,
+    payments: [...payments, synthetic],
+    rates,
+    weeks,
+  });
+
+  const minBefore = Math.min(...before.weeks.map((w) => w.closing));
+  const minAfter = Math.min(...after.weeks.map((w) => w.closing));
+  const worstWeek = after.weeks.reduce((m, w) => (w.closing < m.closing ? w : m), after.weeks[0]);
+
+  // Did the PO push any week below the red line or into negative that wasn't before?
+  const newlyBreached = after.weeks.filter((w, i) => w.closing < redLine && before.weeks[i].closing >= redLine);
+
+  // Earliest week where issuing the PO would still leave cash above the red line.
+  let recommendedDate = null;
+  for (const w of before.weeks) {
+    if (w.closing - amount >= redLine) {
+      recommendedDate = w.week_start;
+      break;
+    }
+  }
+
+  let decision, reason;
+  if (minAfter >= minOperating) {
+    decision = 'SAFE';
+    reason = 'Cash stays above the minimum operating level for the whole horizon.';
+  } else if (minAfter >= redLine) {
+    decision = 'CAUTION';
+    reason = 'Cash stays positive but dips below the safe reserve. Proceed only if collections are on track.';
+  } else if (minAfter >= 0) {
+    decision = 'DELAY';
+    reason = 'This purchase pushes cash below the critical line. Delay or split it, or secure a collection first.';
+  } else {
+    decision = 'AVOID';
+    reason = 'This purchase makes cash go negative. Do not issue until cash recovers.';
+  }
+
+  return {
+    amount: round2(amount),
+    due_date: date,
+    decision,
+    reason,
+    min_closing_before: round2(minBefore),
+    min_closing_after: round2(minAfter),
+    impact: round2(minAfter - minBefore),
+    worst_week: worstWeek ? { week_start: worstWeek.week_start, closing: worstWeek.closing, status: worstWeek.status } : null,
+    newly_breached_weeks: newlyBreached.map((w) => ({ week_start: w.week_start, closing: w.closing })),
+    recommended_earliest_date: recommendedDate,
+    weeks_before: before.weeks,
+    weeks_after: after.weeks,
+  };
+}
+
+/* ---- Action Center: prioritized management actions ----
+   Turns the current cash picture into a ranked to-do list. */
+export function buildActionCenter({ settings, reserve, dashboard, forecast, collections, payments, rates }) {
+  const base = settings?.base_currency || 'SAR';
+  const today = startOfDay(new Date());
+  const in14 = addDays(today, 14);
+  const actions = [];
+  const sev = { critical: 3, high: 2, medium: 1 };
+
+  // 1) Forecast weeks that go critical / negative
+  forecast.weeks.forEach((w) => {
+    if (w.status === 'Critical' || w.closing < 0) {
+      actions.push({
+        severity: w.closing < 0 ? 'critical' : 'high',
+        type: 'cash_shortfall',
+        title: `Projected cash shortfall — week of ${w.week_start}`,
+        detail: `Closing balance falls to ${round2(w.closing)} ${base}.`,
+        recommendation: 'Delay non-critical payments this week and accelerate top receivables.',
+        date: w.week_start,
+        amount: round2(w.closing),
+      });
+    }
+  });
+
+  // 2) Overdue collections (expected in the past, not yet collected)
+  collections.forEach((c) => {
+    const d = parseDate(c.expected_date);
+    if (d && d < today && !c.actual_collection_date) {
+      const days = Math.round((today - d) / (24 * 60 * 60 * 1000));
+      actions.push({
+        severity: days > 30 ? 'critical' : 'high',
+        type: 'overdue_collection',
+        title: `Overdue collection — ${c.customer || c.project || 'customer'}`,
+        detail: `${round2(toBase(c.amount, c.currency, rates, base))} ${base} expected ${c.expected_date} (${days} days overdue).`,
+        recommendation: 'Call the customer / send a payment reminder today.',
+        owner: c.owner,
+        date: c.expected_date,
+        amount: round2(toBase(c.amount, c.currency, rates, base)),
+      });
+    }
+  });
+
+  // 3) Large upcoming payments in the next 14 days
+  payments.forEach((p) => {
+    if (p.paid) return;
+    const d = parseDate(p.due_date);
+    const amt = toBase(p.amount, p.currency, rates, base);
+    if (d && d >= today && d <= in14 && amt >= 50000) {
+      actions.push({
+        severity: p.priority === 'Critical' ? 'critical' : 'high',
+        type: 'upcoming_payment',
+        title: `Large payment due soon — ${p.supplier || 'supplier'}`,
+        detail: `${round2(amt)} ${base} due ${p.due_date} (${p.category || 'payment'}).`,
+        recommendation: p.can_delay
+          ? 'Can be delayed if cash is tight this week.'
+          : 'Ensure funds are available; confirm before issuing.',
+        owner: p.owner,
+        date: p.due_date,
+        amount: round2(amt),
+      });
+    }
+  });
+
+  // 4) Collection-dependency: weeks whose outflows exceed the opening balance
+  //    (i.e. the week only survives if expected collections actually land)
+  forecast.weeks.forEach((w) => {
+    if (w.outflows > w.opening && w.inflows > 0) {
+      actions.push({
+        severity: 'medium',
+        type: 'collection_dependency',
+        title: `Payments depend on collections — week of ${w.week_start}`,
+        detail: `Outflows ${round2(w.outflows)} exceed opening ${round2(w.opening)}; the week relies on ${round2(w.inflows)} ${base} of expected collections.`,
+        recommendation: 'Confirm these collections before committing the week’s payments.',
+        date: w.week_start,
+        amount: round2(w.inflows),
+      });
+    }
+  });
+
+  // 5) Reserve gap
+  if (dashboard.reserve_gap > 0) {
+    actions.push({
+      severity: 'medium',
+      type: 'reserve_gap',
+      title: 'Reserve fund below target',
+      detail: `Reserve gap of ${dashboard.reserve_gap} ${base} vs target.`,
+      recommendation: 'Transfer surplus to the reserve in weeks with healthy closing balances.',
+      amount: dashboard.reserve_gap,
+    });
+  }
+
+  actions.sort((a, b) => sev[b.severity] - sev[a.severity]);
+  const summary = {
+    total: actions.length,
+    critical: actions.filter((a) => a.severity === 'critical').length,
+    high: actions.filter((a) => a.severity === 'high').length,
+    medium: actions.filter((a) => a.severity === 'medium').length,
+  };
+  return { summary, actions };
 }

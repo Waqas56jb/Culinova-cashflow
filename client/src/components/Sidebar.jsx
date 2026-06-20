@@ -2,6 +2,8 @@ import { NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   FiGrid,
+  FiZap,
+  FiShoppingCart,
   FiTrendingUp,
   FiFolder,
   FiDownload,
@@ -17,6 +19,8 @@ import {
 
 const items = [
   { to: '/', icon: FiGrid, key: 'nav.dashboard', end: true },
+  { to: '/action-center', icon: FiZap, key: 'nav.actionCenter' },
+  { to: '/decision', icon: FiShoppingCart, key: 'nav.decision' },
   { to: '/forecast', icon: FiTrendingUp, key: 'nav.forecast' },
   { to: '/projects', icon: FiFolder, key: 'nav.projects' },
   { to: '/collections', icon: FiDownload, key: 'nav.collections' },

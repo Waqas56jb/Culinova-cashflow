@@ -9,6 +9,8 @@ const TITLES = {
   '/': 'nav.dashboard',
   '/users': 'nav.users',
   '/audit': 'nav.audit',
+  '/action-center': 'nav.actionCenter',
+  '/decision': 'nav.decision',
   '/forecast': 'nav.forecast',
   '/reserve': 'nav.reserve',
   '/scenario': 'nav.scenario',

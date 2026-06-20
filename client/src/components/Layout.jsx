@@ -7,6 +7,8 @@ import { RESOURCES } from '../resources.js';
 
 const TITLES = {
   '/': 'nav.dashboard',
+  '/action-center': 'nav.actionCenter',
+  '/decision': 'nav.decision',
   '/forecast': 'nav.forecast',
   '/reserve': 'nav.reserve',
   '/scenario': 'nav.scenario',

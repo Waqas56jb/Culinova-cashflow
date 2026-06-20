@@ -6,6 +6,9 @@ import {
   computeForecast,
   computeReserve,
   computeScenarios,
+  computeCommitments,
+  simulatePurchase,
+  buildActionCenter,
 } from '../utils/calc.js';
 
 const router = Router();
@@ -68,6 +71,42 @@ router.get('/scenarios', async (_req, res) => {
     const forecast = computeForecast({ ...ctx });
     const dashboard = computeDashboard({ ...ctx, forecast });
     res.json(computeScenarios({ scenarios: ctx.scenarios, dashboard, settings: ctx.settings }));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/analytics/commitments  -> available vs committed cash
+router.get('/commitments', async (_req, res) => {
+  try {
+    const ctx = await loadContext();
+    res.json(computeCommitments(ctx));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/analytics/simulate  -> cash impact of a proposed purchase order
+//   body: { amount, due_date, weeks? }
+router.post('/simulate', async (req, res) => {
+  try {
+    const ctx = await loadContext();
+    const { amount, due_date, weeks } = req.body || {};
+    if (!amount || !due_date)
+      return res.status(400).json({ error: 'amount and due_date are required' });
+    res.json(simulatePurchase({ ...ctx, po: { amount, due_date, weeks } }));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/analytics/action-center  -> prioritized management actions
+router.get('/action-center', async (_req, res) => {
+  try {
+    const ctx = await loadContext();
+    const forecast = computeForecast({ ...ctx });
+    const dashboard = computeDashboard({ ...ctx, forecast });
+    res.json(buildActionCenter({ ...ctx, dashboard, forecast }));
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

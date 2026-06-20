@@ -18,7 +18,9 @@ const TITLES = {
 };
 
 export default function Layout() {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= 1024 : true
+  );
   const { t } = useTranslation();
   const { pathname } = useLocation();
 
@@ -28,11 +30,17 @@ export default function Layout() {
   return (
     <div className="min-h-screen">
       <Sidebar open={open} />
+
       {open && (
         <div className="fixed inset-0 bg-black/40 z-20 lg:hidden" onClick={() => setOpen(false)} />
       )}
-      <div className="lg:ltr:ml-[260px] lg:rtl:mr-[260px] flex flex-col min-h-screen">
-        <Topbar onMenu={() => setOpen(true)} title={t(titleKey)} />
+
+      <div
+        className={`flex flex-col min-h-screen transition-[margin] duration-200 ${
+          open ? 'lg:ltr:ml-[260px] lg:rtl:mr-[260px]' : ''
+        }`}
+      >
+        <Topbar onToggle={() => setOpen((o) => !o)} title={t(titleKey)} />
         <main className="flex-1 p-4 lg:p-6">
           <Outlet />
         </main>

@@ -57,8 +57,8 @@ export default function Sidebar({ open }) {
   const { t } = useTranslation();
   return (
     <aside
-      className={`fixed z-30 top-0 bottom-0 w-[260px] bg-slate-900 text-slate-200 flex flex-col transition-transform
-        ${open ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}
+      className={`fixed z-30 top-0 bottom-0 w-[260px] bg-slate-900 text-slate-200 flex flex-col transition-transform duration-200
+        ${open ? 'translate-x-0' : 'ltr:-translate-x-full rtl:translate-x-full'}`}
       style={{ insetInlineStart: 0 }}
     >
       <div className="h-16 flex items-center gap-3 px-5 border-b border-white/10">

@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { FiMenu, FiGlobe, FiLogOut } from 'react-icons/fi';
 import { useApp } from '../context/AppContext.jsx';
 
-export default function Topbar({ onMenu, title }) {
+export default function Topbar({ onToggle, title }) {
   const { t, i18n } = useTranslation();
   const { user, logout } = useApp();
 
@@ -10,8 +10,13 @@ export default function Topbar({ onMenu, title }) {
 
   return (
     <header className="h-16 bg-white border-b border-slate-200 flex items-center gap-3 px-4 lg:px-6 sticky top-0 z-20">
-      <button className="lg:hidden btn-ghost !p-2" onClick={onMenu} aria-label="menu">
-        <FiMenu />
+      <button
+        className="btn-ghost !p-2.5"
+        onClick={onToggle}
+        aria-label="Toggle sidebar"
+        title="Open / close menu"
+      >
+        <FiMenu size={20} />
       </button>
       <h1 className="text-lg font-bold text-ink flex-1 truncate">{title}</h1>
 

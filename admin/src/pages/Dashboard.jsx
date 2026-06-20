@@ -89,9 +89,7 @@ export default function Dashboard() {
       >
         <div>
           <div className="text-sm/none opacity-80 uppercase tracking-wide">{t('kpi.cashStatus')}</div>
-          <div className="text-3xl font-extrabold mt-1">
-            {d.cash_status} · {t(`status.${d.cash_status}`)}
-          </div>
+          <div className="text-3xl font-extrabold mt-1">{t(`status.${d.cash_status}`)}</div>
         </div>
         <div className="text-right">
           <div className="text-sm opacity-80">{t('kpi.netCash')}</div>

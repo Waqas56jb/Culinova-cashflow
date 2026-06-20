@@ -73,7 +73,7 @@ create table if not exists projects (
   currency           text default 'SAR',
   contract_value     numeric default 0,
   collected_to_date  numeric default 0,
-  gross_profit_pct   numeric default 0.20,
+  gross_profit_pct   numeric default 0.30,
   status             text default 'In Progress', -- Signed|In Progress|Delivered|Invoiced|Collected|On Hold
   progress_pct       numeric,                     -- actual delivery / project progress % (0..100), entered by management
   next_billing       text,

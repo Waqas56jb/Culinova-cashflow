@@ -96,7 +96,8 @@ for r, v in rows_of('Projects Summary', 10):
         continue
     data['projects'].append({
         'name': to_str(v[0]), 'contract_value': to_num(v[1]), 'collected_to_date': to_num(v[2]),
-        'gross_profit_pct': to_num(v[4]), 'status': to_str(v[6]), 'next_billing': to_str(v[7]),
+        # Client standard expected margin = 30% (overrides the 0.2 in the Excel sheet)
+        'gross_profit_pct': 0.30, 'status': to_str(v[6]), 'next_billing': to_str(v[7]),
         'expected_collection_date': to_date(v[8]), 'notes': to_str(v[9]),
     })
 

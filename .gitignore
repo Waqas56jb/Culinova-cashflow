@@ -6,6 +6,8 @@ node_modules/
 .env
 **/.env
 !**/.env.example
+# committed so Vercel frontend builds pick up the public API URL (no secrets here)
+!**/.env.production
 
 # build output
 dist/

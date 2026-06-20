@@ -53,7 +53,12 @@ app.use('/api/audit', crudRouter('audit_log', { orderBy: 'created_at', ascending
 // 404
 app.use((req, res) => res.status(404).json({ error: 'Route not found' }));
 
-app.listen(PORT, () => {
-  console.log(`\n  CULINOVA API running on http://localhost:${PORT}`);
-  console.log(`  Allowed origins: ${origins.join(', ')}\n`);
-});
+// Local dev: start an HTTP server. On Vercel (serverless) we export the app instead.
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`\n  CULINOVA API running on http://localhost:${PORT}`);
+    console.log(`  Allowed origins: ${origins.join(', ')}\n`);
+  });
+}
+
+export default app;

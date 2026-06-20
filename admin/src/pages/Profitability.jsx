@@ -23,12 +23,32 @@ export default function Profitability() {
     ['GP %', 'actual_gp_pct', 'p'],
   ];
 
+  const tt = data.totals;
+  const Tile = ({ label, value, tone = 'text-ink' }) => (
+    <div className="card p-4">
+      <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">{label}</div>
+      <div className={`text-lg font-extrabold ${tone}`}>{value}</div>
+    </div>
+  );
+
   return (
     <div className="space-y-4">
       <p className="text-sm text-slate-500">
-        Profitability per project. <b>Gross Profit = Revenue − Cost</b> and{' '}
-        <b>GP % = Gross Profit ÷ Revenue</b>, where Revenue = Contract Value and Cost = supplier
-        payments linked to the project.
+        Profitability per project. <b>GP = Contract Value − Project Costs</b> (only supplier payments
+        linked to the project; company overhead is excluded). <b>GP % = GP ÷ Contract Value.</b>
+      </p>
+
+      {/* Company profit summary */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <Tile label="Total Contract" value={m(tt.contract_value)} />
+        <Tile label="Project Costs" value={m(tt.total_direct_cost)} tone="text-orange-600" />
+        <Tile label="Gross Profit" value={m(tt.gross_profit)} tone="text-emerald-600" />
+        <Tile label="Overhead (OPEX)" value={m(tt.overhead_opex)} tone="text-orange-600" />
+        <Tile label="Net Profit" value={m(tt.net_profit)} tone={tt.net_profit < 0 ? 'text-red-600' : 'text-emerald-700'} />
+      </div>
+      <p className="text-xs text-slate-400">
+        Net Profit = Gross Profit − Overhead (Salaries, Rent, Government Fees, Other Expenses,
+        Commissions). Project Costs include direct supplier/logistics/installation payments only.
       </p>
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">

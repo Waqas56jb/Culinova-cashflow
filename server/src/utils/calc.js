@@ -449,17 +449,70 @@ function clamp(n, lo = 0, hi = 100) {
   return Math.max(lo, Math.min(hi, n));
 }
 
+// Categories that are a DIRECT project cost (count toward a project's GP).
+const DIRECT_COST_CATEGORIES = new Set([
+  'Supplier Payment', 'Logistics & Transportation', 'Installation Costs',
+]);
+// Categories that are company OVERHEAD / OPEX (excluded from project GP, used for Net Profit).
+const OVERHEAD_CATEGORIES = new Set([
+  'Salaries', 'Rent', 'Government Fees', 'Other Expenses', 'Commissions',
+]);
+
+// Parse a payment's Project Link into weighted allocations across projects.
+//   "BARAYA"              -> 100% to Baraya
+//   "ZUHA/PRINCE"         -> 50% / 50% (equal split)
+//   "BARAYA:70, ZUHA:30"  -> 70% / 30% (explicit percentages)
+// Returns [{ name, weight }] (weights sum to 1) or null if no project matched.
+function parseAllocations(link, projTok) {
+  const segs = String(link || '').split(/[,/]+/).map((s) => s.trim()).filter(Boolean);
+  if (!segs.length) return null;
+  const parsed = [];
+  for (const seg of segs) {
+    const m = seg.match(/^(.*?)[:=]\s*([\d.]+)\s*%?$/);
+    const nm = (m ? m[1] : seg).trim().toUpperCase();
+    const weight = m ? Number(m[2]) : null;
+    const proj = projTok.find(({ tok }) => tok.some((t) => nm.includes(t)));
+    if (proj && !parsed.find((x) => x.name === proj.p.name)) {
+      parsed.push({ name: proj.p.name, weight });
+    }
+  }
+  if (!parsed.length) return null;
+  const hasWeights = parsed.some((x) => x.weight != null);
+  if (hasWeights) {
+    const total = parsed.reduce((a, x) => a + (x.weight || 0), 0) || 1;
+    return parsed.map((x) => ({ name: x.name, weight: (x.weight || 0) / total }));
+  }
+  return parsed.map((x) => ({ name: x.name, weight: 1 / parsed.length }));
+}
+
 export function computeProjectRollups({ projects, collections, payments, settings, rates }) {
   const base = settings?.base_currency || 'SAR';
   const projTok = projects.map((p) => ({ p, tok: nameTokens(p.name) }));
 
-  // attribute each payment to the FIRST project whose token appears in its link
-  const linked = new Map(projects.map((p) => [p.name, []]));
+  // Accumulate DIRECT project cost per project (overhead excluded), with
+  // multi-project allocation. Track total vs paid; capture company overhead.
+  const cost = new Map(projects.map((p) => [p.name, { total: 0, paid: 0 }]));
+  let totalOverhead = 0;
+  let unallocatedDirect = 0;
   for (const pay of payments) {
-    const link = String(pay.project_link || '').toUpperCase();
-    if (!link) continue;
-    const hit = projTok.find(({ tok }) => tok.some((t) => link.includes(t)));
-    if (hit) linked.get(hit.p.name).push(pay);
+    const amt = toBase(pay.amount, pay.currency, rates, base);
+    if (OVERHEAD_CATEGORIES.has(pay.category)) {
+      totalOverhead += amt;
+      continue;
+    }
+    if (!DIRECT_COST_CATEGORIES.has(pay.category)) continue;
+    const allocs = parseAllocations(pay.project_link, projTok);
+    if (!allocs) {
+      unallocatedDirect += amt; // a direct cost not tied to any known project
+      continue;
+    }
+    for (const a of allocs) {
+      const c = cost.get(a.name);
+      if (!c) continue;
+      const portion = amt * a.weight;
+      c.total += portion;
+      if (pay.paid) c.paid += portion;
+    }
   }
 
   const rollups = projects.map((p) => {
@@ -470,14 +523,12 @@ export function computeProjectRollups({ projects, collections, payments, setting
     const expectedGp = contract * gpPct;
     const budgetCost = contract - expectedGp;
 
-    const pays = linked.get(p.name) || [];
-    const supplierCommitments = pays.reduce((a, x) => a + toBase(x.amount, x.currency, rates, base), 0);
-    const paidCommitments = pays
-      .filter((x) => x.paid)
-      .reduce((a, x) => a + toBase(x.amount, x.currency, rates, base), 0);
-    const actualCost = supplierCommitments; // total committed cost to suppliers
+    const c = cost.get(p.name) || { total: 0, paid: 0 };
+    const supplierCommitments = c.total; // direct project cost committed
+    const paidCommitments = c.paid;
+    const actualCost = supplierCommitments;
     const outstanding = supplierCommitments - paidCommitments;
-    const actualGp = contract - actualCost;
+    const actualGp = contract - actualCost; // GP = Contract Value − Project Costs
     const actualGpPct = contract ? actualGp / contract : 0;
 
     // ---- health score components (0..100), all from actual project data ----
@@ -555,10 +606,21 @@ export function computeProjectRollups({ projects, collections, payments, setting
     };
   });
 
+  const totalContract = rollups.reduce((a, r) => a + r.contract_value, 0);
+  const totalProjectCost = rollups.reduce((a, r) => a + r.actual_cost, 0);
+  const totalDirectCost = totalProjectCost + unallocatedDirect;
+  const grossProfit = totalContract - totalDirectCost; // company gross profit (Rule 4)
+  const netProfit = grossProfit - totalOverhead; // Rule 5: GP − overhead (OPEX)
+
   const totals = {
-    contract_value: round2(rollups.reduce((a, r) => a + r.contract_value, 0)),
+    contract_value: round2(totalContract),
     expected_gp: round2(rollups.reduce((a, r) => a + r.expected_gp, 0)),
-    actual_cost: round2(rollups.reduce((a, r) => a + r.actual_cost, 0)),
+    project_cost: round2(totalProjectCost),
+    unallocated_direct_cost: round2(unallocatedDirect),
+    total_direct_cost: round2(totalDirectCost),
+    overhead_opex: round2(totalOverhead),
+    gross_profit: round2(grossProfit),
+    net_profit: round2(netProfit),
     remaining_ar: round2(rollups.reduce((a, r) => a + r.remaining_ar, 0)),
     supplier_commitments: round2(rollups.reduce((a, r) => a + r.supplier_commitments, 0)),
   };

@@ -415,9 +415,194 @@ export function simulatePurchase({ settings, reserve, collections, payments, rat
   };
 }
 
+/* ============================================================
+   PROJECT-LEVEL MANAGEMENT ROLLUPS
+   Links payments to projects and rolls up profitability, health,
+   control-tower metrics and procurement readiness per project.
+   ============================================================ */
+
+const NAME_STOP = new Set([
+  'THE', 'AND', 'FOR', 'WITH', 'CARE', 'CENTER', 'CENTRE', 'HOTEL', 'PALACE',
+  'VILLA', 'EXTENDED', 'HOSPITAL', 'PROJECT', 'COMPANY', 'NEW', 'LTD',
+  'CLINIC', 'SCHOOL', 'SCHOOLS', 'RESTAURANT', 'LAUNDRIES', 'LAUNDRY',
+]);
+
+function nameTokens(name) {
+  return String(name || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9 ]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length >= 4 && !NAME_STOP.has(w));
+}
+
+// Map each project's status to an approximate delivery / installation %.
+const STATUS_PROGRESS = {
+  Signed: { delivery: 10, installation: 0 },
+  'In Progress': { delivery: 50, installation: 25 },
+  Delivered: { delivery: 100, installation: 75 },
+  Invoiced: { delivery: 100, installation: 100 },
+  Collected: { delivery: 100, installation: 100 },
+  'On Hold': { delivery: 20, installation: 10 },
+};
+
+function clamp(n, lo = 0, hi = 100) {
+  return Math.max(lo, Math.min(hi, n));
+}
+
+export function computeProjectRollups({ projects, collections, payments, settings, rates }) {
+  const base = settings?.base_currency || 'SAR';
+  const projTok = projects.map((p) => ({ p, tok: nameTokens(p.name) }));
+
+  // attribute each payment to the FIRST project whose token appears in its link
+  const linked = new Map(projects.map((p) => [p.name, []]));
+  for (const pay of payments) {
+    const link = String(pay.project_link || '').toUpperCase();
+    if (!link) continue;
+    const hit = projTok.find(({ tok }) => tok.some((t) => link.includes(t)));
+    if (hit) linked.get(hit.p.name).push(pay);
+  }
+
+  const rollups = projects.map((p) => {
+    const contract = Number(p.contract_value) || 0;
+    const collected = Number(p.collected_to_date) || 0;
+    const gpPct = Number(p.gross_profit_pct) || 0;
+    const remainingAr = contract - collected;
+    const expectedGp = contract * gpPct;
+    const budgetCost = contract - expectedGp;
+
+    const pays = linked.get(p.name) || [];
+    const supplierCommitments = pays.reduce((a, x) => a + toBase(x.amount, x.currency, rates, base), 0);
+    const paidCommitments = pays
+      .filter((x) => x.paid)
+      .reduce((a, x) => a + toBase(x.amount, x.currency, rates, base), 0);
+    const actualCost = supplierCommitments; // total committed cost to suppliers
+    const outstanding = supplierCommitments - paidCommitments;
+    const actualGp = contract - actualCost;
+    const actualGpPct = contract ? actualGp / contract : 0;
+
+    const collectionPct = contract ? clamp((collected / contract) * 100) : 0;
+    const procurementPct = supplierCommitments ? clamp((paidCommitments / supplierCommitments) * 100) : 0;
+    const prog = STATUS_PROGRESS[p.status] || STATUS_PROGRESS['In Progress'];
+
+    // ---- health score components (0..100) ----
+    const sCollections = collectionPct;
+    const sProcurement = procurementPct;
+    const sDelivery = prog.delivery;
+    const sProfit = gpPct ? clamp((actualGpPct / gpPct) * 100) : 50;
+    const overall = Math.round(
+      sCollections * 0.3 + sProfit * 0.3 + sDelivery * 0.25 + sProcurement * 0.15
+    );
+    const band = (v) => (v >= 70 ? 'good' : v >= 40 ? 'warn' : 'risk');
+
+    // ---- procurement readiness ----
+    let readiness, reason;
+    if (supplierCommitments === 0) {
+      readiness = 'READY';
+      reason = 'No supplier commitments linked yet — safe to plan procurement.';
+    } else {
+      const coverage = outstanding > 0 ? remainingAr / outstanding : Infinity;
+      if (collectionPct >= 50 && coverage >= 1) {
+        readiness = 'READY';
+        reason = 'Expected receivables cover outstanding supplier commitments.';
+      } else if (coverage >= 0.6) {
+        readiness = 'CAUTION';
+        reason = 'Receivables partially cover commitments — proceed only on confirmed collections.';
+      } else {
+        readiness = 'HOLD';
+        reason = 'Outstanding commitments exceed expected collections — wait for cash to arrive.';
+      }
+    }
+
+    return {
+      name: p.name,
+      status: p.status,
+      contract_value: round2(contract),
+      collected: round2(collected),
+      remaining_ar: round2(remainingAr),
+      gp_pct: round4(gpPct),
+      expected_gp: round2(expectedGp),
+      budget_cost: round2(budgetCost),
+      actual_cost: round2(actualCost),
+      actual_gp: round2(actualGp),
+      actual_gp_pct: round4(actualGpPct),
+      supplier_commitments: round2(supplierCommitments),
+      paid_commitments: round2(paidCommitments),
+      outstanding_commitments: round2(outstanding),
+      collection_pct: Math.round(collectionPct),
+      procurement_pct: Math.round(procurementPct),
+      delivery_pct: prog.delivery,
+      installation_pct: prog.installation,
+      health: {
+        overall,
+        band: band(overall),
+        collections: { score: Math.round(sCollections), band: band(sCollections) },
+        procurement: { score: Math.round(sProcurement), band: band(sProcurement) },
+        delivery: { score: Math.round(sDelivery), band: band(sDelivery) },
+        profitability: { score: Math.round(sProfit), band: band(sProfit) },
+      },
+      readiness,
+      readiness_reason: reason,
+      cash_impact: round2(outstanding),
+    };
+  });
+
+  const totals = {
+    contract_value: round2(rollups.reduce((a, r) => a + r.contract_value, 0)),
+    expected_gp: round2(rollups.reduce((a, r) => a + r.expected_gp, 0)),
+    actual_cost: round2(rollups.reduce((a, r) => a + r.actual_cost, 0)),
+    remaining_ar: round2(rollups.reduce((a, r) => a + r.remaining_ar, 0)),
+    supplier_commitments: round2(rollups.reduce((a, r) => a + r.supplier_commitments, 0)),
+  };
+  return { projects: rollups, totals };
+}
+
+/* ---- Monthly financial forecast: revenue / GP / OPEX / net profit ---- */
+const OPEX_CATEGORIES = new Set([
+  'Salaries', 'Rent', 'Government Fees', 'Other Expenses', 'Commissions',
+]);
+
+export function computeMonthlyForecast({ projects, collections, payments, settings, rates, months = 6 }) {
+  const base = settings?.base_currency || 'SAR';
+  const totalContract = projects.reduce((a, p) => a + (Number(p.contract_value) || 0), 0);
+  const totalExpGp = projects.reduce(
+    (a, p) => a + (Number(p.contract_value) || 0) * (Number(p.gross_profit_pct) || 0),
+    0
+  );
+  const blendedGp = totalContract ? totalExpGp / totalContract : 0.2;
+
+  const start = startOfDay(parseDate(settings?.forecast_start_date) || new Date());
+  const startMonth = new Date(start.getFullYear(), start.getMonth(), 1);
+  const buckets = [];
+  for (let i = 0; i < months; i++) {
+    const m = new Date(startMonth.getFullYear(), startMonth.getMonth() + i, 1);
+    const next = new Date(m.getFullYear(), m.getMonth() + 1, 1);
+    const inRange = (d) => d && d >= m && d < next;
+
+    const revenue = collections.reduce((a, c) => {
+      const d = parseDate(c.expected_date);
+      return inRange(d) ? a + toBase(c.amount, c.currency, rates, base) : a;
+    }, 0);
+    const opex = payments.reduce((a, p) => {
+      const d = parseDate(p.due_date);
+      return inRange(d) && OPEX_CATEGORIES.has(p.category)
+        ? a + toBase(p.amount, p.currency, rates, base)
+        : a;
+    }, 0);
+    const grossProfit = revenue * blendedGp;
+    buckets.push({
+      month: `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, '0')}`,
+      revenue: round2(revenue),
+      gross_profit: round2(grossProfit),
+      opex: round2(opex),
+      net_profit: round2(grossProfit - opex),
+    });
+  }
+  return { blended_gp_pct: round4(blendedGp), months: buckets };
+}
+
 /* ---- Action Center: prioritized management actions ----
    Turns the current cash picture into a ranked to-do list. */
-export function buildActionCenter({ settings, reserve, dashboard, forecast, collections, payments, rates }) {
+export function buildActionCenter({ settings, reserve, dashboard, forecast, collections, payments, rates, rollups }) {
   const base = settings?.base_currency || 'SAR';
   const today = startOfDay(new Date());
   const in14 = addDays(today, 14);
@@ -505,6 +690,40 @@ export function buildActionCenter({ settings, reserve, dashboard, forecast, coll
       amount: dashboard.reserve_gap,
     });
   }
+
+  // 6) Project-level management actions (procurement decisions, risk, profitability)
+  (rollups?.projects || []).forEach((r) => {
+    if (r.readiness === 'HOLD') {
+      actions.push({
+        severity: 'high',
+        type: 'procurement_decision',
+        title: `Procurement decision needed — ${r.name}`,
+        detail: `Outstanding supplier commitments ${r.outstanding_commitments} ${base} vs remaining receivables ${r.remaining_ar} ${base}.`,
+        recommendation: 'Hold procurement until collections arrive, or secure a confirmed receipt first.',
+        amount: r.outstanding_commitments,
+      });
+    }
+    if (r.health.overall < 40) {
+      actions.push({
+        severity: 'high',
+        type: 'high_risk_project',
+        title: `High-risk project — ${r.name}`,
+        detail: `Health score ${r.health.overall}/100 (collections ${r.collection_pct}%, delivery ${r.delivery_pct}%).`,
+        recommendation: 'Review collections, delivery and cost exposure with the project owner.',
+        amount: r.remaining_ar,
+      });
+    }
+    if (r.gp_pct > 0 && r.actual_gp_pct < r.gp_pct * 0.5) {
+      actions.push({
+        severity: 'medium',
+        type: 'profitability_warning',
+        title: `Profitability warning — ${r.name}`,
+        detail: `Actual GP ${(r.actual_gp_pct * 100).toFixed(0)}% vs target ${(r.gp_pct * 100).toFixed(0)}% (cost overrun risk).`,
+        recommendation: 'Review supplier costs and scope; renegotiate or reprice if possible.',
+        amount: r.actual_gp,
+      });
+    }
+  });
 
   actions.sort((a, b) => sev[b.severity] - sev[a.severity]);
   const summary = {

@@ -7,6 +7,11 @@ import Login from './pages/Login.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import ActionCenter from './pages/ActionCenter.jsx';
 import Decision from './pages/Decision.jsx';
+import Profitability from './pages/Profitability.jsx';
+import ControlTower from './pages/ControlTower.jsx';
+import ProjectHealth from './pages/ProjectHealth.jsx';
+import ProcurementReadiness from './pages/ProcurementReadiness.jsx';
+import MonthlyForecast from './pages/MonthlyForecast.jsx';
 import Forecast from './pages/Forecast.jsx';
 import Reserve from './pages/Reserve.jsx';
 import Scenario from './pages/Scenario.jsx';
@@ -47,6 +52,11 @@ export default function App() {
         <Route index element={<Dashboard />} />
         <Route path="action-center" element={<ActionCenter />} />
         <Route path="decision" element={<Decision />} />
+        <Route path="profitability" element={<Profitability />} />
+        <Route path="control-tower" element={<ControlTower />} />
+        <Route path="project-health" element={<ProjectHealth />} />
+        <Route path="procurement-readiness" element={<ProcurementReadiness />} />
+        <Route path="monthly-forecast" element={<MonthlyForecast />} />
         <Route path="users" element={<Users />} />
         <Route path="audit" element={<Audit />} />
         <Route path="forecast" element={<Forecast />} />

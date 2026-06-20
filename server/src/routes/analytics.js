@@ -9,6 +9,8 @@ import {
   computeCommitments,
   simulatePurchase,
   buildActionCenter,
+  computeProjectRollups,
+  computeMonthlyForecast,
 } from '../utils/calc.js';
 
 const router = Router();
@@ -16,13 +18,14 @@ router.use(requireAuth);
 
 // Load all the raw inputs the engine needs, in parallel.
 async function loadContext() {
-  const [settings, reserve, ratesRows, collections, payments, scenarios] = await Promise.all([
+  const [settings, reserve, ratesRows, collections, payments, scenarios, projects] = await Promise.all([
     supabase.from('company_settings').select('*').eq('id', 1).single(),
     supabase.from('reserve_fund').select('*').eq('id', 1).single(),
     supabase.from('exchange_rates').select('*'),
-    supabase.from('collections').select('amount,currency,expected_date'),
-    supabase.from('payments').select('amount,currency,due_date'),
+    supabase.from('collections').select('*'),
+    supabase.from('payments').select('*'),
     supabase.from('scenarios').select('*'),
+    supabase.from('projects').select('*'),
   ]);
 
   const rates = {};
@@ -35,6 +38,7 @@ async function loadContext() {
     collections: collections.data || [],
     payments: payments.data || [],
     scenarios: scenarios.data || [],
+    projects: projects.data || [],
   };
 }
 
@@ -106,7 +110,30 @@ router.get('/action-center', async (_req, res) => {
     const ctx = await loadContext();
     const forecast = computeForecast({ ...ctx });
     const dashboard = computeDashboard({ ...ctx, forecast });
-    res.json(buildActionCenter({ ...ctx, dashboard, forecast }));
+    const rollups = computeProjectRollups(ctx);
+    res.json(buildActionCenter({ ...ctx, dashboard, forecast, rollups }));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/analytics/projects360  -> per-project rollups (profitability,
+//   control tower, health score, procurement readiness — one rich payload)
+router.get('/projects360', async (_req, res) => {
+  try {
+    const ctx = await loadContext();
+    res.json(computeProjectRollups(ctx));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/analytics/monthly-forecast?months=6
+router.get('/monthly-forecast', async (req, res) => {
+  try {
+    const ctx = await loadContext();
+    const months = Number(req.query.months) || 6;
+    res.json(computeMonthlyForecast({ ...ctx, months }));
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

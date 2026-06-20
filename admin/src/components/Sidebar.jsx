@@ -4,6 +4,11 @@ import {
   FiGrid,
   FiZap,
   FiShoppingCart,
+  FiPieChart,
+  FiColumns,
+  FiHeart,
+  FiCheckSquare,
+  FiCalendar,
   FiUsers,
   FiList,
   FiTrendingUp,
@@ -34,6 +39,11 @@ const groups = [
     items: [
       { to: '/action-center', icon: FiZap, key: 'nav.actionCenter' },
       { to: '/decision', icon: FiShoppingCart, key: 'nav.decision' },
+      { to: '/profitability', icon: FiPieChart, key: 'nav.profitability' },
+      { to: '/control-tower', icon: FiColumns, key: 'nav.controlTower' },
+      { to: '/project-health', icon: FiHeart, key: 'nav.health' },
+      { to: '/procurement-readiness', icon: FiCheckSquare, key: 'nav.procurement' },
+      { to: '/monthly-forecast', icon: FiCalendar, key: 'nav.monthly' },
     ],
   },
   {

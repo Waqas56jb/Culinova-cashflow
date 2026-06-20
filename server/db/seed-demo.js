@@ -71,10 +71,11 @@ const P = (category, supplier, amount, due_date, priority, project_link, notes) 
 });
 
 const payments = [
-  // ---- Baraya supplier payments (real, from Excel Payments sheet) ----
+  // ---- Baraya & ZUHA supplier payments (real, from Excel Payments sheet) ----
+  // NOTE: multi-project shared rows (e.g. "ZUHA/PRINCE", "PRINCE/HIGH CARE/BARAYA")
+  // were excluded so this demo stays strictly within the two demo projects.
   P('Supplier Payment', 'SICO', 16857.6, '2026-06-20', 'Medium', 'BARAYA', '1ST PAYMENT'),
   P('Supplier Payment', 'ENDALUS', 9242.55, '2026-06-25', 'High', 'BARAYA', 'PAYMENTS TERMS'),
-  P('Logistics & Transportation', 'POWER CARGO', 11656.0, '2026-06-25', 'High', 'ZUHA/PRINCE', 'SHIPPING CAMBRO'),
   P('Supplier Payment', 'BURLODGE', 55379.89, '2026-06-26', 'Medium', 'BARAYA', '2ND PAYMENT'),
   P('Government Fees', 'GOVERNMENT', 4000.0, '2026-07-01', 'High', 'BARAYA', 'SAPER/CUSTOMS/PORT CHARGE'),
   P('Supplier Payment', 'ABU ALI', 15000.0, '2026-07-01', 'High', 'BARAYA', '1ST PAYMENT'),
@@ -82,7 +83,6 @@ const payments = [
   P('Supplier Payment', 'SICO', 16857.6, '2026-07-05', 'Medium', 'BARAYA', '2ND PAYMENT'),
   P('Supplier Payment', 'LOCAL', 229144.0, '2026-07-05', 'High', 'ZUHA', '1ST PAYMENT'),
   P('Logistics & Transportation', 'POWER CARGO/LOADMAN', 4800.0, '2026-07-10', 'High', 'BARAYA', 'SHIPPING BARTCHER'),
-  P('Logistics & Transportation', 'ABU MOHAMMED', 8000.0, '2026-07-10', 'High', 'PRINCE/HIGH CARE/BARAYA', 'TRANSPORT FROM FAGOR/MARIOT/SICO'),
   P('Supplier Payment', 'TUV', 1150.0, '2026-07-15', 'Medium', 'BARAYA', ''),
   P('Supplier Payment', 'LOCAL', 8560.0, '2026-07-20', 'High', 'BARAYA', 'PANININ, DEEM, INSECT KILLER'),
   P('Supplier Payment', 'Fathi Al-Mohtaseb Trading', 9694.0, '2026-07-20', 'High', 'BARAYA', 'CAN BE REPLACED WITH BARTSCHER'),
@@ -117,7 +117,7 @@ async function run() {
   const pa = await supabase.from('payments').insert(payments).select('id');
   console.log('payments inserted:', pa.error ? 'ERR ' + pa.error.message : pa.data.length);
 
-  console.log('\n  Demo data ready. Bank: 133,835.21 SAR | 2 projects | 2 collections | 18 payments');
+  console.log('\n  Demo data ready. Bank: 133,835.21 SAR | 2 projects | 2 collections | 16 payments (Baraya & ZUHA only)');
 }
 
 run().catch((e) => {

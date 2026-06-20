@@ -8,12 +8,10 @@ export default function Settings() {
   const { t } = useTranslation();
   const { user } = useApp();
   const [s, setS] = useState(null);
-  const [rates, setRates] = useState([]);
   const canEdit = ['admin', 'cfo'].includes(user?.role);
 
   const load = () => {
     api.get('/settings/company').then((r) => setS(r.data));
-    api.get('/settings/rates').then((r) => setRates(r.data));
   };
   useEffect(load, []);
 
@@ -21,7 +19,7 @@ export default function Settings() {
     try {
       await api.put('/settings/company', {
         company_name: s.company_name,
-        base_currency: s.base_currency,
+        base_currency: 'SAR',
         current_bank_balance: Number(s.current_bank_balance) || 0,
         vat_rate: Number(s.vat_rate) || 0,
         status_green: Number(s.status_green) || 0,
@@ -32,15 +30,6 @@ export default function Settings() {
       toast.success(t('common.saved'));
     } catch (e) {
       toast.error(e.response?.data?.error || 'Save failed');
-    }
-  };
-
-  const saveRate = async (currency, rate) => {
-    try {
-      await api.put(`/settings/rates/${currency}`, { rate_to_sar: Number(rate) || 0 });
-      toast.success(`${currency} updated`);
-    } catch (e) {
-      toast.error(e.response?.data?.error || 'Failed');
     }
   };
 
@@ -65,7 +54,10 @@ export default function Settings() {
         <h3 className="font-bold text-ink mb-4">Company & Cash Settings</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <F label="Company Name" k="company_name" />
-          <F label="Base Currency" k="base_currency" />
+          <div>
+            <label className="label">Currency</label>
+            <input className="input bg-slate-50" value="SAR (Saudi Riyal)" disabled />
+          </div>
           <F label="Current Bank Balance" k="current_bank_balance" type="number" step="any" />
           <F label="VAT Rate (e.g. 0.15)" k="vat_rate" type="number" step="0.01" />
           <F label="Forecast Start Date" k="forecast_start_date" type="date" />
@@ -79,34 +71,6 @@ export default function Settings() {
             {t('common.save')}
           </button>
         )}
-      </div>
-
-      <div className="card p-6">
-        <h3 className="font-bold text-ink mb-4">Exchange Rates (1 unit = ? SAR)</h3>
-        <div className="space-y-2">
-          {rates.map((r, i) => (
-            <div key={r.currency} className="flex items-center gap-3">
-              <span className="w-14 font-bold">{r.currency}</span>
-              <input
-                className="input flex-1"
-                type="number"
-                step="0.0001"
-                defaultValue={r.rate_to_sar}
-                disabled={!canEdit}
-                onChange={(e) => {
-                  const copy = [...rates];
-                  copy[i] = { ...r, rate_to_sar: e.target.value };
-                  setRates(copy);
-                }}
-              />
-              {canEdit && (
-                <button className="btn-ghost" onClick={() => saveRate(r.currency, rates[i].rate_to_sar)}>
-                  {t('common.save')}
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
       </div>
     </div>
   );

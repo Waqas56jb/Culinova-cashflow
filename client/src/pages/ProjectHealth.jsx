@@ -56,7 +56,7 @@ export default function ProjectHealth() {
         <div className="mt-3 space-y-1.5 text-slate-600">
           <div><b>Collections %</b> = Collected ÷ Contract Value × 100</div>
           <div><b>Procurement %</b> = Linked Supplier Commitments ÷ Budget Cost × 100&nbsp;
-            <span className="text-slate-400">(Budget Cost = Contract × (1 − Target GP%))</span></div>
+            <span className="text-slate-400">(Budget Cost = Contract × (1 − Expected GP%))</span></div>
           <div><b>Delivery %</b> = Project Progress % (entered per project; otherwise estimated from collection &amp; procurement progress)</div>
           <div><b>Profitability %</b> = (Revenue − Cost) ÷ Revenue × 100&nbsp;
             <span className="text-slate-400">(actual gross margin; 50 = neutral when no cost linked)</span></div>

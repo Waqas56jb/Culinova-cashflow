@@ -480,17 +480,26 @@ export function computeProjectRollups({ projects, collections, payments, setting
     const actualGp = contract - actualCost;
     const actualGpPct = contract ? actualGp / contract : 0;
 
+    // ---- health score components (0..100), all from actual project data ----
+    // Collections: how much of the contract has been collected
     const collectionPct = contract ? clamp((collected / contract) * 100) : 0;
-    const procurementPct = supplierCommitments ? clamp((paidCommitments / supplierCommitments) * 100) : 0;
-    const prog = STATUS_PROGRESS[p.status] || STATUS_PROGRESS['In Progress'];
+    // Procurement: how much of the budgeted cost is already committed to suppliers
+    const procurementPct = budgetCost > 0 ? clamp((supplierCommitments / budgetCost) * 100) : 0;
+    // Delivery: management-entered progress %, else estimated from real progress
+    // signals (how far collections and procurement have actually advanced).
+    const hasProgress = p.progress_pct !== null && p.progress_pct !== undefined && p.progress_pct !== '';
+    const progressProxy = clamp((collectionPct + procurementPct) / 2);
+    const deliveryPct = hasProgress ? clamp(Number(p.progress_pct)) : progressProxy;
+    const installationPct = hasProgress ? clamp(Number(p.progress_pct) * 0.85) : clamp(progressProxy * 0.85);
+    // Profitability: actual gross margin % (Revenue − Cost) / Revenue.
+    // Neutral 50 when no supplier cost is linked yet (can't be assessed).
+    const sProfit = actualCost > 0 ? clamp(actualGpPct * 100) : 50;
 
-    // ---- health score components (0..100) ----
     const sCollections = collectionPct;
     const sProcurement = procurementPct;
-    const sDelivery = prog.delivery;
-    const sProfit = gpPct ? clamp((actualGpPct / gpPct) * 100) : 50;
+    const sDelivery = deliveryPct;
     const overall = Math.round(
-      sCollections * 0.3 + sProfit * 0.3 + sDelivery * 0.25 + sProcurement * 0.15
+      sCollections * 0.3 + sProfit * 0.3 + sDelivery * 0.2 + sProcurement * 0.2
     );
     const band = (v) => (v >= 70 ? 'good' : v >= 40 ? 'warn' : 'risk');
 
@@ -530,8 +539,8 @@ export function computeProjectRollups({ projects, collections, payments, setting
       outstanding_commitments: round2(outstanding),
       collection_pct: Math.round(collectionPct),
       procurement_pct: Math.round(procurementPct),
-      delivery_pct: prog.delivery,
-      installation_pct: prog.installation,
+      delivery_pct: Math.round(deliveryPct),
+      installation_pct: Math.round(installationPct),
       health: {
         overall,
         band: band(overall),

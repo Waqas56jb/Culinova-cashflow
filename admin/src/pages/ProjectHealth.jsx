@@ -47,9 +47,24 @@ export default function ProjectHealth() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-slate-500">
-        Overall health score (0–100) per project, combining collections, procurement, delivery and
-        profitability.
+        Overall health score (0–100) per project — every component is calculated from the project's
+        actual data.
       </p>
+
+      <details className="card p-4 text-sm">
+        <summary className="font-semibold text-ink cursor-pointer">How is the Health Score calculated?</summary>
+        <div className="mt-3 space-y-1.5 text-slate-600">
+          <div><b>Collections %</b> = Collected ÷ Contract Value × 100</div>
+          <div><b>Procurement %</b> = Linked Supplier Commitments ÷ Budget Cost × 100&nbsp;
+            <span className="text-slate-400">(Budget Cost = Contract × (1 − Target GP%))</span></div>
+          <div><b>Delivery %</b> = Project Progress % (entered per project; otherwise estimated from collection &amp; procurement progress)</div>
+          <div><b>Profitability %</b> = (Revenue − Cost) ÷ Revenue × 100&nbsp;
+            <span className="text-slate-400">(actual gross margin; 50 = neutral when no cost linked)</span></div>
+          <div className="pt-2 border-t border-slate-100 font-semibold text-ink">
+            Health Score = Collections×30% + Profitability×30% + Delivery×20% + Procurement×20%
+          </div>
+        </div>
+      </details>
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {data.projects
           .slice()

@@ -41,6 +41,7 @@ export const RESOURCES = {
       { key: 'gross_profit_pct', label: 'GP %', type: 'percent' },
       { key: 'expected_gross_profit', label: 'Exp. Gross Profit', type: 'money', computed: true },
       { key: 'status', label: 'Status', type: 'select', options: LISTS.project_status, pill: true },
+      { key: 'progress_pct', label: 'Delivery / Progress %', type: 'number' },
       { key: 'next_billing', label: 'Next Billing', type: 'text' },
       { key: 'expected_collection_date', label: 'Exp. Collection', type: 'date' },
       { key: 'notes', label: 'Notes', type: 'text' },

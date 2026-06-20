@@ -75,7 +75,7 @@ export default function ResourcePage({ config }) {
       const payload = { ...form };
       columns.forEach((c) => {
         if (c.computed) return;
-        if (['number', 'money', 'percent'].includes(c.type)) {
+        if (['number', 'money', 'percent', 'percent100'].includes(c.type)) {
           payload[c.key] = payload[c.key] === '' ? null : Number(payload[c.key]);
         }
         if (c.type === 'date' && payload[c.key] === '') payload[c.key] = null;
@@ -121,8 +121,12 @@ export default function ResourcePage({ config }) {
       return money(convert(Number(v) || 0, displayCurrency, rates), displayCurrency, i18n.language);
     // Show the exact stored value (e.g. 0.2) — no rounding, no % conversion (matches Excel)
     if (c.type === 'percent') return v == null || v === '' ? '—' : `${Number(v)}`;
-    // Calculated ratio shown as a percentage (e.g. 0.588 -> 58.8%)
-    if (c.type === 'percent100') return v == null || v === '' ? '—' : `${(Number(v) * 100).toFixed(1)}%`;
+    // Ratio shown as a percentage (e.g. 0.3 -> 30%, 0.588 -> 58.8%)
+    if (c.type === 'percent100') {
+      if (v == null || v === '') return '—';
+      const n = Number(v) * 100;
+      return Number.isInteger(n) ? `${n}%` : `${n.toFixed(1)}%`;
+    }
     if (c.type === 'number') return v == null || v === '' ? '—' : `${Number(v)}`;
     if (c.type === 'date') return fmtDate(v, i18n.language);
     if (c.type === 'checkbox')
@@ -308,11 +312,11 @@ export default function ResourcePage({ config }) {
                         type={
                           c.type === 'date'
                             ? 'date'
-                            : ['number', 'money', 'percent'].includes(c.type)
+                            : ['number', 'money', 'percent', 'percent100'].includes(c.type)
                               ? 'number'
                               : 'text'
                         }
-                        step={c.type === 'percent' ? '0.01' : 'any'}
+                        step={c.type === 'percent' || c.type === 'percent100' ? '0.01' : 'any'}
                         value={form[c.key] ?? ''}
                         onChange={(e) => setForm({ ...form, [c.key]: e.target.value })}
                       />

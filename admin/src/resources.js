@@ -38,7 +38,7 @@ export const RESOURCES = {
       { key: 'contract_value', label: 'Contract Value', type: 'money' },
       { key: 'collected_to_date', label: 'Collected', type: 'money' },
       { key: 'remaining_ar', label: 'Remaining AR', type: 'money', computed: true },
-      { key: 'gross_profit_pct', label: 'Expected GP %', type: 'percent' },
+      { key: 'gross_profit_pct', label: 'Expected GP %', type: 'percent100' },
       { key: 'expected_gross_profit', label: 'Expected Gross Profit', type: 'money', computed: true },
       { key: 'actual_cost', label: 'Cost', type: 'money', computed: true },
       { key: 'actual_gp', label: 'GP (Rev−Cost)', type: 'money', computed: true },

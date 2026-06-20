@@ -8,6 +8,7 @@ import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
 import settingsRoutes from './routes/settings.js';
 import analyticsRoutes from './routes/analytics.js';
+import projectsList from './routes/projectsList.js';
 import { crudRouter } from './utils/crud.js';
 import {
   deriveProject,
@@ -38,6 +39,8 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/analytics', analyticsRoutes);
 
 // Data resources (CRUD + derived fields)
+// Enriched GET list for projects (adds calculated cost & actual GP%); other verbs fall through.
+app.use('/api/projects', projectsList);
 app.use('/api/projects', crudRouter('projects', { derive: deriveProject, orderBy: 'name', ascending: true }));
 app.use('/api/collections', crudRouter('collections', { derive: deriveCollection, orderBy: 'expected_date', ascending: true }));
 app.use('/api/payments', crudRouter('payments', { derive: (r) => r, orderBy: 'due_date', ascending: true }));

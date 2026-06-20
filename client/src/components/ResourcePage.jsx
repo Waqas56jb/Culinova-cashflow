@@ -121,6 +121,8 @@ export default function ResourcePage({ config }) {
       return money(convert(Number(v) || 0, displayCurrency, rates), displayCurrency, i18n.language);
     // Show the exact stored value (e.g. 0.2) — no rounding, no % conversion (matches Excel)
     if (c.type === 'percent') return v == null || v === '' ? '—' : `${Number(v)}`;
+    // Calculated ratio shown as a percentage (e.g. 0.588 -> 58.8%)
+    if (c.type === 'percent100') return v == null || v === '' ? '—' : `${(Number(v) * 100).toFixed(1)}%`;
     if (c.type === 'number') return v == null || v === '' ? '—' : `${Number(v)}`;
     if (c.type === 'date') return fmtDate(v, i18n.language);
     if (c.type === 'checkbox')

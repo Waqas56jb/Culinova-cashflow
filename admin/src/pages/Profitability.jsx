@@ -15,18 +15,20 @@ export default function Profitability() {
   const m = (v) => money(v, 'SAR', i18n.language);
   const cols = [
     ['Project', 'name'],
-    ['Contract Value', 'contract_value', 'm'],
+    ['Revenue (Contract)', 'contract_value', 'm'],
     ['Budget Cost', 'budget_cost', 'm'],
-    ['Actual Cost', 'actual_cost', 'm'],
+    ['Cost (Actual)', 'actual_cost', 'm'],
     ['Expected GP', 'expected_gp', 'm'],
-    ['Actual GP', 'actual_gp', 'm'],
+    ['Gross Profit (Rev − Cost)', 'actual_gp', 'm'],
     ['GP %', 'actual_gp_pct', 'p'],
   ];
 
   return (
     <div className="space-y-4">
       <p className="text-sm text-slate-500">
-        Profitability per project — expected vs actual gross profit, with cost committed to suppliers.
+        Profitability per project. <b>Gross Profit = Revenue − Cost</b> and{' '}
+        <b>GP % = Gross Profit ÷ Revenue</b>, where Revenue = Contract Value and Cost = supplier
+        payments linked to the project.
       </p>
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">

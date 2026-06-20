@@ -119,8 +119,9 @@ export default function ResourcePage({ config }) {
     const v = row[c.key];
     if (c.type === 'money')
       return money(convert(Number(v) || 0, displayCurrency, rates), displayCurrency, i18n.language);
-    if (c.type === 'percent') return pct(v);
-    if (c.type === 'number') return v == null || v === '' ? '—' : num(v);
+    // Show the exact stored value (e.g. 0.2) — no rounding, no % conversion (matches Excel)
+    if (c.type === 'percent') return v == null || v === '' ? '—' : `${Number(v)}`;
+    if (c.type === 'number') return v == null || v === '' ? '—' : `${Number(v)}`;
     if (c.type === 'date') return fmtDate(v, i18n.language);
     if (c.type === 'checkbox')
       return (

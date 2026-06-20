@@ -12,10 +12,11 @@ export function money(value, currency = 'SAR', lng = 'en') {
     return new Intl.NumberFormat(lng === 'ar' ? 'ar-SA' : 'en-US', {
       style: 'currency',
       currency,
-      maximumFractionDigits: 0,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     }).format(n);
   } catch {
-    return `${currency} ${n.toLocaleString()}`;
+    return `${currency} ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
 }
 

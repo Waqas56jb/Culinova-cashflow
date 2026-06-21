@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { supabase } from '../config/supabase.js';
 import { requireAuth } from '../middleware/auth.js';
+import { nameTokens, matchProject } from '../utils/calc.js';
 
 // Master lists for dropdowns (projects, suppliers, employees/owners, customers).
 // Derived from existing data so dropdowns stay in sync and prevent typos /
@@ -24,10 +25,22 @@ router.get('/', async (_req, res) => {
       supabase.from('ar_aging').select('customer'),
     ]);
 
-    // collection references for the payment "depends on" dropdown
+    // Resolve each collection's project text to the canonical project name so the
+    // "depends on" dropdown can be filtered to collections of the same project,
+    // even when the collection's project was typed differently (e.g. "Prince FAISAL"
+    // vs the master "Prince FAISAL Palace").
+    const projTok = (projects.data || []).map((p) => ({ p: { name: p.name }, tok: nameTokens(p.name) }));
+    const freq = {};
+    projTok.forEach(({ tok }) => tok.forEach((t) => (freq[t] = (freq[t] || 0) + 1)));
+    const canonical = (text) => {
+      const m = matchProject(text, projTok, freq);
+      return m ? m.name : text || '';
+    };
+
     const collectionRefs = (collections.data || [])
       .map((c) => ({
         value: c.id,
+        project: canonical(c.project),
         label: `${c.customer || c.project || 'Collection'} • SAR ${Math.round(Number(c.amount) || 0).toLocaleString()} • ${c.expected_date || ''}`,
       }))
       .sort((a, b) => a.label.localeCompare(b.label));

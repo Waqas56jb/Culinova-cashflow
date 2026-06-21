@@ -447,7 +447,7 @@ export function simulatePurchase({ settings, reserve, collections, payments, rat
 // (e.g. "Schools", "Hospital", "Hotel" can be the actual project name/identity).
 const NAME_STOP = new Set(['THE', 'AND', 'FOR', 'WITH', 'NEW', 'LTD', 'COMPANY', 'PROJECT']);
 
-function nameTokens(name) {
+export function nameTokens(name) {
   const words = String(name || '')
     .toUpperCase()
     .replace(/[^A-Z0-9 ]/g, ' ')
@@ -460,7 +460,7 @@ function nameTokens(name) {
 
 // Pick the project a payment link refers to. Distinctive tokens (that appear
 // in only one project) outweigh shared ones like "HOSPITAL" or "PALACE".
-function matchProject(segment, projTok, freq) {
+export function matchProject(segment, projTok, freq) {
   const nm = String(segment || '').toUpperCase();
   let best = null;
   let bestScore = 0;
@@ -535,6 +535,9 @@ function parseAllocations(link, projTok, freq) {
 
 export function computeProjectRollups({ projects, collections, payments, settings, rates }) {
   const base = settings?.base_currency || 'SAR';
+  // Contract Value is VAT-inclusive → net revenue = contract / (1 + VAT rate).
+  // VAT rate comes from company settings (generalized, not hard-coded to 1.15).
+  const vatRate = settings?.vat_rate != null ? Number(settings.vat_rate) : 0.15;
   const projTok = projects.map((p) => ({ p, tok: nameTokens(p.name) }));
   // token frequency across projects → distinctive tokens get priority in matching
   const freq = {};
@@ -580,8 +583,10 @@ export function computeProjectRollups({ projects, collections, payments, setting
     const paidCommitments = c.paid;
     const actualCost = supplierCommitments;
     const outstanding = supplierCommitments - paidCommitments;
-    const actualGp = contract - actualCost; // GP = Contract Value − Project Costs
-    const actualGpPct = contract ? actualGp / contract : 0;
+    // GP = (Contract / (1 + VAT)) − Cost ; cost is NET (excl. VAT). GP% on net revenue.
+    const netRevenue = contract / (1 + vatRate);
+    const actualGp = netRevenue - actualCost;
+    const actualGpPct = netRevenue ? actualGp / netRevenue : 0;
 
     // ---- health score components (0..100), all from actual project data ----
     // Collections: how much of the contract has been collected
@@ -629,6 +634,7 @@ export function computeProjectRollups({ projects, collections, payments, setting
       name: p.name,
       status: p.status,
       contract_value: round2(contract),
+      net_revenue: round2(netRevenue),
       collected: round2(collected),
       remaining_ar: round2(remainingAr),
       gp_pct: round4(gpPct),
@@ -659,9 +665,10 @@ export function computeProjectRollups({ projects, collections, payments, setting
   });
 
   const totalContract = rollups.reduce((a, r) => a + r.contract_value, 0);
+  const totalNetRevenue = rollups.reduce((a, r) => a + r.net_revenue, 0);
   const totalProjectCost = rollups.reduce((a, r) => a + r.actual_cost, 0);
-  const grossProfit = totalContract - totalProjectCost; // company gross profit (Rule 4)
-  const netProfit = grossProfit - totalOverhead; // Rule 5: GP − overhead (OPEX)
+  const grossProfit = totalNetRevenue - totalProjectCost; // GP = net revenue − cost
+  const netProfit = grossProfit - totalOverhead; // Net Profit = GP − overhead (OPEX)
 
   const totals = {
     contract_value: round2(totalContract),

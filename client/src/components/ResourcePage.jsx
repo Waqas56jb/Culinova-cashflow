@@ -376,7 +376,12 @@ export default function ResourcePage({ config }) {
                   </div>
                 );
               }
-              const fieldOpts = colOptions(c) || [];
+              let fieldOpts = colOptions(c) || [];
+              // optionally show only options matching another field (e.g. collections of the selected project)
+              if (c.filterByField) {
+                const fv = form[c.filterByField];
+                if (fv) fieldOpts = fieldOpts.filter((o) => typeof o === 'object' && o[c.filterKey] === fv);
+              }
               const isObjOpts = c.type === 'select' && fieldOpts.length && typeof fieldOpts[0] === 'object';
               return (
                 <div key={c.key} className={c.type === 'checkbox' ? 'flex items-center gap-2 pt-5' : ''}>
@@ -396,7 +401,24 @@ export default function ResourcePage({ config }) {
                   ) : (
                     <>
                       <label className="label">{c.label}</label>
-                      {c.type === 'select' ? (
+                      {c.type === 'select' && c.allowNew ? (
+                        // combobox: pick an existing value OR type a brand-new one
+                        <>
+                          <input
+                            className="input"
+                            list={`dl-${c.key}`}
+                            value={form[c.key] ?? ''}
+                            onChange={(e) => setForm({ ...form, [c.key]: e.target.value })}
+                            placeholder="Select or type a new value…"
+                          />
+                          <datalist id={`dl-${c.key}`}>
+                            {fieldOpts.map((o) => {
+                              const opt = isObjOpts ? o : { label: o, value: o };
+                              return <option key={opt.value} value={opt.value} />;
+                            })}
+                          </datalist>
+                        </>
+                      ) : c.type === 'select' ? (
                         <select
                           className="input"
                           value={form[c.key] ?? ''}

@@ -55,7 +55,7 @@ export const RESOURCES = {
     titleKey: 'nav.collections',
     columns: [
       { key: 'project', label: 'Project', type: 'select', optionsSource: 'projects' },
-      { key: 'customer', label: 'Customer', type: 'select', optionsSource: 'customers' },
+      { key: 'customer', label: 'Customer', type: 'select', optionsSource: 'customers', allowNew: true },
       { key: 'amount', label: 'Amount', type: 'money' },
       { key: 'expected_date', label: 'Expected Date', type: 'date' },
       { key: 'probability_pct', label: 'Prob %', type: 'number' },
@@ -64,7 +64,7 @@ export const RESOURCES = {
       { key: 'confirmed', label: 'Confirmed', type: 'checkbox' },
       { key: 'actual_collection_date', label: 'Actual Date', type: 'date' },
       { key: 'delay_days', label: 'Delay (days)', type: 'number', computed: true },
-      { key: 'owner', label: 'Owner', type: 'select', optionsSource: 'employees' },
+      { key: 'owner', label: 'Owner', type: 'select', optionsSource: 'employees', allowNew: true },
       { key: 'notes', label: 'Notes', type: 'text' },
     ],
     filters: [
@@ -89,7 +89,7 @@ export const RESOURCES = {
     titleKey: 'nav.payments',
     columns: [
       { key: 'category', label: 'Category', type: 'select', options: LISTS.payment_category },
-      { key: 'supplier', label: 'Supplier/Payee', type: 'select', optionsSource: 'suppliers' },
+      { key: 'supplier', label: 'Supplier/Payee', type: 'select', optionsSource: 'suppliers', allowNew: true },
       { key: 'amount', label: 'Amount (excl. VAT)', type: 'money' },
       {
         key: 'vat_rate',
@@ -120,12 +120,12 @@ export const RESOURCES = {
       { key: 'due_date', label: 'Due Date', type: 'date' },
       { key: 'priority', label: 'Priority', type: 'select', options: LISTS.priority, pill: true },
       { key: 'project_link', label: 'Project Link', type: 'select', optionsSource: 'projects' },
-      { key: 'depends_on_collection_id', label: 'Depends on Collection', type: 'select', optionsSource: 'collectionRefs', formOnly: true },
+      { key: 'depends_on_collection_id', label: 'Depends on Collection (same project)', type: 'select', optionsSource: 'collectionRefs', formOnly: true, filterByField: 'project_link', filterKey: 'project' },
       { key: 'depends_on_label', label: 'Depends On', type: 'text', computed: true },
       { key: 'can_delay', label: 'Can Delay?', type: 'checkbox' },
       { key: 'paid', label: 'Paid?', type: 'checkbox' },
       { key: 'actual_payment_date', label: 'Paid Date', type: 'date' },
-      { key: 'owner', label: 'Owner', type: 'select', optionsSource: 'employees' },
+      { key: 'owner', label: 'Owner', type: 'select', optionsSource: 'employees', allowNew: true },
       { key: 'notes', label: 'Notes', type: 'text' },
     ],
     filters: [

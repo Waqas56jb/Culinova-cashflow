@@ -26,9 +26,18 @@ export default function ResourcePage({ config }) {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm(columns));
   const [saving, setSaving] = useState(false);
+  const [dynOpts, setDynOpts] = useState({});
 
   const canWrite = ['admin', 'cfo', 'sales'].includes(user?.role);
   const canDelete = ['admin', 'cfo'].includes(user?.role);
+
+  // master lists for dropdown fields that use `optionsSource`
+  const needsOptions = columns.some((c) => c.optionsSource);
+  useEffect(() => {
+    if (!needsOptions) return;
+    api.get('/options').then((r) => setDynOpts(r.data)).catch(() => {});
+  }, [needsOptions]);
+  const colOptions = (c) => (c.optionsSource ? dynOpts[c.optionsSource] || [] : c.options);
 
   const load = async () => {
     setLoading(true);
@@ -292,7 +301,8 @@ export default function ResourcePage({ config }) {
                   </div>
                 );
               }
-              const isObjOpts = c.type === 'select' && c.options?.length && typeof c.options[0] === 'object';
+              const fieldOpts = colOptions(c) || [];
+              const isObjOpts = c.type === 'select' && fieldOpts.length && typeof fieldOpts[0] === 'object';
               return (
                 <div key={c.key} className={c.type === 'checkbox' ? 'flex items-center gap-2 pt-5' : ''}>
                   {c.type === 'checkbox' ? (
@@ -318,7 +328,7 @@ export default function ResourcePage({ config }) {
                           onChange={(e) => setForm({ ...form, [c.key]: e.target.value })}
                         >
                           <option value="">—</option>
-                          {c.options.map((o) => {
+                          {fieldOpts.map((o) => {
                             const opt = isObjOpts ? o : { label: o, value: o };
                             return (
                               <option key={opt.value} value={opt.value}>

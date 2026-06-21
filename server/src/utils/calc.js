@@ -126,7 +126,7 @@ export function computeDashboard({
 
   return {
     base_currency: base,
-    current_bank_balance: bank,
+    current_bank_balance: round2(bank),
     expected_collections_30d: round2(expectedCollections),
     expected_payments_30d: round2(expectedPayments),
     net_cash_position_30d: round2(netCashPosition),
@@ -491,14 +491,20 @@ function clamp(n, lo = 0, hi = 100) {
   return Math.max(lo, Math.min(hi, n));
 }
 
-// Categories that are a DIRECT project cost (count toward a project's GP).
-const DIRECT_COST_CATEGORIES = new Set([
-  'Supplier Payment', 'Logistics & Transportation', 'Installation Costs',
-]);
-// Categories that are company OVERHEAD / OPEX (excluded from project GP, used for Net Profit).
-const OVERHEAD_CATEGORIES = new Set([
-  'Salaries', 'Rent', 'Government Fees', 'Other Expenses', 'Commissions',
-]);
+// RULE (client): ANY expense assigned to a project is a project cost — this
+// includes supplier payments, logistics, installation, SABER/customs/port fees,
+// certification, inspection, storage, local transport, etc. The only always-
+// company-overhead categories (never a project cost, even if mis-linked) are
+// payroll and rent. Everything else: linked to a project → project cost;
+// not linked to any project → company overhead (OPEX).
+const ALWAYS_OVERHEAD = new Set(['Salaries', 'Rent']);
+
+// A payment is company overhead if it is payroll/rent, or it isn't linked
+// to any project.
+function isOverheadPayment(p, projTok, freq) {
+  if (ALWAYS_OVERHEAD.has(p.category)) return true;
+  return !parseAllocations(p.project_link, projTok, freq);
+}
 
 // Parse a payment's Project Link into weighted allocations across projects.
 //   "BARAYA"              -> 100% to Baraya
@@ -538,21 +544,20 @@ export function computeProjectRollups({ projects, collections, payments, setting
   // multi-project allocation. Track total vs paid; capture company overhead.
   const cost = new Map(projects.map((p) => [p.name, { total: 0, paid: 0 }]));
   let totalOverhead = 0;
-  let unallocatedDirect = 0;
   let totalVat = 0;
   for (const pay of payments) {
     totalVat += toBase(vatOf(pay), pay.currency, rates, base); // VAT tracked separately (net × rate)
     const amt = toBase(pay.amount, pay.currency, rates, base); // NET (excl. VAT) for profitability
-    if (OVERHEAD_CATEGORIES.has(pay.category)) {
-      totalOverhead += amt;
+    if (ALWAYS_OVERHEAD.has(pay.category)) {
+      totalOverhead += amt; // payroll / rent → always company overhead
       continue;
     }
-    if (!DIRECT_COST_CATEGORIES.has(pay.category)) continue;
     const allocs = parseAllocations(pay.project_link, projTok, freq);
     if (!allocs) {
-      unallocatedDirect += amt; // a direct cost not tied to any known project
+      totalOverhead += amt; // not linked to a project → company overhead (OPEX)
       continue;
     }
+    // linked to a project → counts as that project's cost (any expense type)
     for (const a of allocs) {
       const c = cost.get(a.name);
       if (!c) continue;
@@ -655,16 +660,14 @@ export function computeProjectRollups({ projects, collections, payments, setting
 
   const totalContract = rollups.reduce((a, r) => a + r.contract_value, 0);
   const totalProjectCost = rollups.reduce((a, r) => a + r.actual_cost, 0);
-  const totalDirectCost = totalProjectCost + unallocatedDirect;
-  const grossProfit = totalContract - totalDirectCost; // company gross profit (Rule 4)
+  const grossProfit = totalContract - totalProjectCost; // company gross profit (Rule 4)
   const netProfit = grossProfit - totalOverhead; // Rule 5: GP − overhead (OPEX)
 
   const totals = {
     contract_value: round2(totalContract),
     expected_gp: round2(rollups.reduce((a, r) => a + r.expected_gp, 0)),
     project_cost: round2(totalProjectCost),
-    unallocated_direct_cost: round2(unallocatedDirect),
-    total_direct_cost: round2(totalDirectCost),
+    total_direct_cost: round2(totalProjectCost),
     overhead_opex: round2(totalOverhead),
     vat_total: round2(totalVat),
     gross_profit: round2(grossProfit),
@@ -676,12 +679,12 @@ export function computeProjectRollups({ projects, collections, payments, setting
 }
 
 /* ---- Monthly financial forecast: revenue / GP / OPEX / net profit ---- */
-const OPEX_CATEGORIES = new Set([
-  'Salaries', 'Rent', 'Government Fees', 'Other Expenses', 'Commissions',
-]);
-
 export function computeMonthlyForecast({ projects, collections, payments, settings, rates, months = 6 }) {
   const base = settings?.base_currency || 'SAR';
+  // overhead = payments not linked to a project (or payroll/rent)
+  const projTok = projects.map((p) => ({ p, tok: nameTokens(p.name) }));
+  const freq = {};
+  projTok.forEach(({ tok }) => tok.forEach((t) => (freq[t] = (freq[t] || 0) + 1)));
   const totalContract = projects.reduce((a, p) => a + (Number(p.contract_value) || 0), 0);
   const totalExpGp = projects.reduce(
     (a, p) => a + (Number(p.contract_value) || 0) * (Number(p.gross_profit_pct) || 0),
@@ -703,7 +706,7 @@ export function computeMonthlyForecast({ projects, collections, payments, settin
     }, 0);
     const opex = payments.reduce((a, p) => {
       const d = parseDate(p.due_date);
-      return inRange(d) && OPEX_CATEGORIES.has(p.category)
+      return inRange(d) && isOverheadPayment(p, projTok, freq)
         ? a + toBase(p.amount, p.currency, rates, base)
         : a;
     }, 0);

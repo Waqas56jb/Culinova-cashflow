@@ -18,6 +18,7 @@ export default function ResourcePage({ config }) {
   const { t, i18n } = useTranslation();
   const { user, displayCurrency, rates } = useApp();
   const { endpoint, columns } = config;
+  const tableColumns = columns.filter((c) => !c.formOnly); // formOnly fields show only in the add/edit form
 
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -27,12 +28,14 @@ export default function ResourcePage({ config }) {
   const [form, setForm] = useState(emptyForm(columns));
   const [saving, setSaving] = useState(false);
   const [dynOpts, setDynOpts] = useState({});
+  const [filters, setFilters] = useState({});
 
   const canWrite = ['admin', 'cfo', 'sales'].includes(user?.role);
   const canDelete = ['admin', 'cfo'].includes(user?.role);
 
-  // master lists for dropdown fields that use `optionsSource`
-  const needsOptions = columns.some((c) => c.optionsSource);
+  // master lists for dropdown fields / filters that use `optionsSource`
+  const needsOptions =
+    columns.some((c) => c.optionsSource) || (config.filters || []).some((f) => f.optionsSource);
   useEffect(() => {
     if (!needsOptions) return;
     api.get('/options').then((r) => setDynOpts(r.data)).catch(() => {});
@@ -54,13 +57,24 @@ export default function ResourcePage({ config }) {
     load(); /* eslint-disable-next-line */
   }, [endpoint]);
 
+  const filterDefs = config.filters || [];
   const filtered = useMemo(() => {
-    if (!q.trim()) return rows;
-    const s = q.toLowerCase();
-    return rows.filter((r) =>
-      columns.some((c) => String(r[c.key] ?? '').toLowerCase().includes(s))
-    );
-  }, [rows, q, columns]);
+    let out = rows;
+    if (q.trim()) {
+      const s = q.toLowerCase();
+      out = out.filter((r) => columns.some((c) => String(r[c.key] ?? '').toLowerCase().includes(s)));
+    }
+    filterDefs.forEach((f) => {
+      const val = filters[f.key];
+      if (f.type === 'date-range') {
+        if (val?.from) out = out.filter((r) => r[f.key] && r[f.key] >= val.from);
+        if (val?.to) out = out.filter((r) => r[f.key] && r[f.key] <= val.to);
+      } else if (val != null && val !== '') {
+        out = out.filter((r) => String(r[f.key] ?? '') === String(val));
+      }
+    });
+    return out;
+  }, [rows, q, columns, filters, filterDefs]);
 
   const openAdd = () => {
     setEditing(null);
@@ -113,9 +127,9 @@ export default function ResourcePage({ config }) {
   };
 
   const exportCsv = () => {
-    const head = columns.map((c) => c.label).join(',');
+    const head = tableColumns.map((c) => c.label).join(',');
     const body = filtered
-      .map((r) => columns.map((c) => `"${String(r[c.key] ?? '').replace(/"/g, '""')}"`).join(','))
+      .map((r) => tableColumns.map((c) => `"${String(r[c.key] ?? '').replace(/"/g, '""')}"`).join(','))
       .join('\n');
     const blob = new Blob([head + '\n' + body], { type: 'text/csv;charset=utf-8;' });
     const a = document.createElement('a');
@@ -188,12 +202,71 @@ export default function ResourcePage({ config }) {
         </div>
       </div>
 
+      {filterDefs.length > 0 && (
+        <div className="card p-3 flex flex-wrap items-end gap-3">
+          {filterDefs.map((f) => {
+            const fOpts = f.optionsSource ? dynOpts[f.optionsSource] || [] : f.options || [];
+            if (f.type === 'date-range') {
+              return (
+                <div key={f.key}>
+                  <label className="label">{f.label}</label>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="date"
+                      className="input !py-1.5"
+                      value={filters[f.key]?.from || ''}
+                      onChange={(e) =>
+                        setFilters({ ...filters, [f.key]: { ...filters[f.key], from: e.target.value } })
+                      }
+                    />
+                    <span className="text-slate-400">→</span>
+                    <input
+                      type="date"
+                      className="input !py-1.5"
+                      value={filters[f.key]?.to || ''}
+                      onChange={(e) =>
+                        setFilters({ ...filters, [f.key]: { ...filters[f.key], to: e.target.value } })
+                      }
+                    />
+                  </div>
+                </div>
+              );
+            }
+            return (
+              <div key={f.key} className="min-w-[140px]">
+                <label className="label">{f.label}</label>
+                <select
+                  className="input !py-1.5"
+                  value={filters[f.key] ?? ''}
+                  onChange={(e) => setFilters({ ...filters, [f.key]: e.target.value })}
+                >
+                  <option value="">All</option>
+                  {fOpts.map((o) => {
+                    const opt = typeof o === 'object' ? o : { label: o, value: o };
+                    return (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+            );
+          })}
+          {Object.keys(filters).length > 0 && (
+            <button className="btn-ghost !py-1.5" onClick={() => setFilters({})}>
+              Clear filters
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-slate-100">
             <thead className="bg-slate-50">
               <tr>
-                {columns.map((c) => (
+                {tableColumns.map((c) => (
                   <th key={c.key} className="th">
                     {c.label}
                   </th>
@@ -204,20 +277,20 @@ export default function ResourcePage({ config }) {
             <tbody className="divide-y divide-slate-50">
               {loading ? (
                 <tr>
-                  <td className="td text-center py-10 text-slate-400" colSpan={columns.length + 1}>
+                  <td className="td text-center py-10 text-slate-400" colSpan={tableColumns.length + 1}>
                     {t('common.loading')}
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td className="td text-center py-10 text-slate-400" colSpan={columns.length + 1}>
+                  <td className="td text-center py-10 text-slate-400" colSpan={tableColumns.length + 1}>
                     {t('common.noData')}
                   </td>
                 </tr>
               ) : (
                 filtered.map((row) => (
                   <tr key={row.id} className="hover:bg-brand-50/40">
-                    {columns.map((c) => (
+                    {tableColumns.map((c) => (
                       <td key={c.key} className="td">
                         {renderCell(row, c)}
                       </td>
@@ -249,7 +322,7 @@ export default function ResourcePage({ config }) {
             {filtered.length > 0 && Object.keys(totals).length > 0 && (
               <tfoot className="bg-slate-50 font-semibold">
                 <tr>
-                  {columns.map((c, i) => (
+                  {tableColumns.map((c, i) => (
                     <td key={c.key} className="td">
                       {i === 0
                         ? t('common.total')

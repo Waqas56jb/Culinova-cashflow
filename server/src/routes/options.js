@@ -19,10 +19,18 @@ router.get('/', async (_req, res) => {
       supabase.from('projects').select('name'),
       supabase.from('supplier_ledger').select('supplier'),
       supabase.from('payments').select('supplier,owner'),
-      supabase.from('collections').select('customer,owner'),
+      supabase.from('collections').select('id,customer,project,amount,expected_date,owner'),
       supabase.from('customer_ledger').select('project_name'),
       supabase.from('ar_aging').select('customer'),
     ]);
+
+    // collection references for the payment "depends on" dropdown
+    const collectionRefs = (collections.data || [])
+      .map((c) => ({
+        value: c.id,
+        label: `${c.customer || c.project || 'Collection'} • SAR ${Math.round(Number(c.amount) || 0).toLocaleString()} • ${c.expected_date || ''}`,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
 
     res.json({
       projects: uniqSorted((projects.data || []).map((r) => r.name)),
@@ -39,6 +47,7 @@ router.get('/', async (_req, res) => {
         ...(custLedger.data || []).map((r) => r.project_name),
         ...(aging.data || []).map((r) => r.customer),
       ]),
+      collectionRefs,
     });
   } catch (e) {
     res.status(500).json({ error: e.message });

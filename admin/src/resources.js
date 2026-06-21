@@ -67,6 +67,22 @@ export const RESOURCES = {
       { key: 'owner', label: 'Owner', type: 'select', optionsSource: 'employees' },
       { key: 'notes', label: 'Notes', type: 'text' },
     ],
+    filters: [
+      { key: 'project', label: 'Project', type: 'select', optionsSource: 'projects' },
+      { key: 'customer', label: 'Customer', type: 'select', optionsSource: 'customers' },
+      { key: 'owner', label: 'Owner', type: 'select', optionsSource: 'employees' },
+      { key: 'probability_status', label: 'Probability', type: 'select', options: LISTS.probability_status },
+      {
+        key: 'confirmed',
+        label: 'Confirmed',
+        type: 'select',
+        options: [
+          { label: 'Yes', value: 'true' },
+          { label: 'No', value: 'false' },
+        ],
+      },
+      { key: 'expected_date', label: 'Expected Date', type: 'date-range' },
+    ],
   },
   payments: {
     endpoint: '/payments',
@@ -104,11 +120,30 @@ export const RESOURCES = {
       { key: 'due_date', label: 'Due Date', type: 'date' },
       { key: 'priority', label: 'Priority', type: 'select', options: LISTS.priority, pill: true },
       { key: 'project_link', label: 'Project Link', type: 'select', optionsSource: 'projects' },
+      { key: 'depends_on_collection_id', label: 'Depends on Collection', type: 'select', optionsSource: 'collectionRefs', formOnly: true },
+      { key: 'depends_on_label', label: 'Depends On', type: 'text', computed: true },
       { key: 'can_delay', label: 'Can Delay?', type: 'checkbox' },
       { key: 'paid', label: 'Paid?', type: 'checkbox' },
       { key: 'actual_payment_date', label: 'Paid Date', type: 'date' },
       { key: 'owner', label: 'Owner', type: 'select', optionsSource: 'employees' },
       { key: 'notes', label: 'Notes', type: 'text' },
+    ],
+    filters: [
+      { key: 'project_link', label: 'Project', type: 'select', optionsSource: 'projects' },
+      { key: 'supplier', label: 'Supplier', type: 'select', optionsSource: 'suppliers' },
+      { key: 'owner', label: 'Owner', type: 'select', optionsSource: 'employees' },
+      { key: 'category', label: 'Category', type: 'select', options: LISTS.payment_category },
+      { key: 'priority', label: 'Priority', type: 'select', options: LISTS.priority },
+      {
+        key: 'paid',
+        label: 'Status',
+        type: 'select',
+        options: [
+          { label: 'Paid', value: 'true' },
+          { label: 'Unpaid', value: 'false' },
+        ],
+      },
+      { key: 'due_date', label: 'Due Date', type: 'date-range' },
     ],
   },
   inventory: {

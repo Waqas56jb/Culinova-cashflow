@@ -9,6 +9,7 @@ import userRoutes from './routes/users.js';
 import settingsRoutes from './routes/settings.js';
 import analyticsRoutes from './routes/analytics.js';
 import projectsList from './routes/projectsList.js';
+import paymentsList from './routes/paymentsList.js';
 import optionsRoutes from './routes/options.js';
 import { crudRouter } from './utils/crud.js';
 import {
@@ -46,6 +47,7 @@ app.use('/api/options', optionsRoutes);
 app.use('/api/projects', projectsList);
 app.use('/api/projects', crudRouter('projects', { derive: deriveProject, orderBy: 'name', ascending: true }));
 app.use('/api/collections', crudRouter('collections', { derive: deriveCollection, orderBy: 'expected_date', ascending: true }));
+app.use('/api/payments', paymentsList);
 app.use('/api/payments', crudRouter('payments', { derive: derivePayment, orderBy: 'due_date', ascending: true }));
 app.use('/api/inventory', crudRouter('inventory', { derive: deriveInventory }));
 app.use('/api/supplier-ledger', crudRouter('supplier_ledger', { derive: (r) => deriveSupplierLedger(r), orderBy: 'supplier', ascending: true }));

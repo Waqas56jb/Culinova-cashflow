@@ -801,6 +801,25 @@ export function buildActionCenter({ settings, reserve, dashboard, forecast, coll
     }
   });
 
+  // 4b) Explicit payment → collection dependencies (planned payment waiting on a receipt)
+  const colById = new Map(collections.map((c) => [c.id, c]));
+  payments.forEach((p) => {
+    if (p.paid || !p.depends_on_collection_id) return;
+    const dep = colById.get(p.depends_on_collection_id);
+    if (dep && !dep.actual_collection_date) {
+      actions.push({
+        severity: 'high',
+        type: 'payment_dependency',
+        title: `Payment depends on a pending collection — ${p.supplier || 'supplier'}`,
+        detail: `${round2(payGross(p, rates, base))} ${base} (${p.due_date || 'no date'}) is funded by collection from ${dep.customer || dep.project || 'customer'} (${round2(toBase(dep.amount, dep.currency, rates, base))} ${base}, due ${dep.expected_date || '—'}) which is not yet received.`,
+        recommendation: 'Confirm the collection is received before releasing this payment.',
+        owner: p.owner,
+        date: p.due_date,
+        amount: round2(payGross(p, rates, base)),
+      });
+    }
+  });
+
   // 5) Reserve gap
   if (dashboard.reserve_gap > 0) {
     actions.push({

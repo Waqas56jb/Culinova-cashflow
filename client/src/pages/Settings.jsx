@@ -21,6 +21,7 @@ export default function Settings() {
         company_name: s.company_name,
         base_currency: 'SAR',
         current_bank_balance: Number(s.current_bank_balance) || 0,
+        opex_annual_budget: Number(s.opex_annual_budget) || 0,
         vat_rate: Number(s.vat_rate) || 0,
         status_green: Number(s.status_green) || 0,
         status_yellow: Number(s.status_yellow) || 0,
@@ -59,6 +60,7 @@ export default function Settings() {
             <input className="input bg-slate-50" value="SAR (Saudi Riyal)" disabled />
           </div>
           <F label="Current Bank Balance" k="current_bank_balance" type="number" step="any" />
+          <F label="Annual OPEX Budget" k="opex_annual_budget" type="number" step="any" />
           <F label="VAT Rate (e.g. 0.15)" k="vat_rate" type="number" step="0.01" />
           <F label="Forecast Start Date" k="forecast_start_date" type="date" />
           <div />

@@ -44,6 +44,7 @@ export const RESOURCES = {
       { key: 'actual_gp', label: 'GP (Rev−Cost)', type: 'money', computed: true },
       { key: 'actual_gp_pct', label: 'GP %', type: 'percent100', computed: true },
       { key: 'status', label: 'Status', type: 'select', options: LISTS.project_status, pill: true },
+      { key: 'include_in_pnl', label: '2026 P&L', type: 'checkbox' },
       { key: 'progress_pct', label: 'Delivery / Progress %', type: 'number' },
       { key: 'next_billing', label: 'Next Billing', type: 'text' },
       { key: 'expected_collection_date', label: 'Exp. Collection', type: 'date' },

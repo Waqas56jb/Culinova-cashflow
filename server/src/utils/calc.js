@@ -633,6 +633,7 @@ export function computeProjectRollups({ projects, collections, payments, setting
     return {
       name: p.name,
       status: p.status,
+      in_pnl: !!p.include_in_pnl, // included in OPEX allocation / company net profit
       contract_value: round2(contract),
       net_revenue: round2(netRevenue),
       collected: round2(collected),
@@ -664,23 +665,66 @@ export function computeProjectRollups({ projects, collections, payments, setting
     };
   });
 
-  const totalContract = rollups.reduce((a, r) => a + r.contract_value, 0);
-  const totalNetRevenue = rollups.reduce((a, r) => a + r.net_revenue, 0);
-  const totalProjectCost = rollups.reduce((a, r) => a + r.actual_cost, 0);
-  const grossProfit = totalNetRevenue - totalProjectCost; // GP = net revenue − cost
-  const netProfit = grossProfit - totalOverhead; // Net Profit = GP − overhead (OPEX)
+  // ---- OPEX allocation (management overhead, time-based + contract share) ----
+  // Annual OPEX budget from settings (generalized). Allocated by days elapsed in
+  // the current year, then split across the 2026 P&L projects by contract share.
+  const opexBudget = settings?.opex_annual_budget != null ? Number(settings.opex_annual_budget) : 1650000;
+  const dailyOpex = opexBudget / 365;
+  const today = startOfDay(new Date());
+  const yearStart = new Date(today.getFullYear(), 0, 1);
+  const daysElapsed = Math.floor((today - yearStart) / (24 * 60 * 60 * 1000)) + 1; // includes today
+  const opexToDate = dailyOpex * daysElapsed;
+
+  // Only the flagged 2026 projects participate in OPEX / net profit / company perf.
+  const pnl = rollups.filter((r) => r.in_pnl);
+  const totalRevenueExVat = pnl.reduce((a, r) => a + r.net_revenue, 0);
+
+  rollups.forEach((r) => {
+    if (r.in_pnl && totalRevenueExVat > 0) {
+      const share = r.net_revenue / totalRevenueExVat;
+      const allocOpex = share * opexToDate;
+      const np = r.actual_gp - allocOpex;
+      r.contract_share_pct = round4(share);
+      r.allocated_opex = round2(allocOpex);
+      r.net_profit = round2(np);
+      r.net_profit_pct = r.net_revenue ? round4(np / r.net_revenue) : 0;
+    } else {
+      // projects outside the 2026 list: keep GP, but no OPEX / net profit (N/A)
+      r.contract_share_pct = null;
+      r.allocated_opex = null;
+      r.net_profit = null;
+      r.net_profit_pct = null;
+    }
+  });
+
+  // ---- Company Performance (2026 projects only) ----
+  const totalDirectCost = pnl.reduce((a, r) => a + r.actual_cost, 0);
+  const totalGrossProfit = totalRevenueExVat - totalDirectCost;
+  const companyNetProfit = totalGrossProfit - opexToDate;
 
   const totals = {
-    contract_value: round2(totalContract),
-    expected_gp: round2(rollups.reduce((a, r) => a + r.expected_gp, 0)),
-    project_cost: round2(totalProjectCost),
-    total_direct_cost: round2(totalProjectCost),
-    overhead_opex: round2(totalOverhead),
+    // company performance (2026 P&L projects only)
+    projects_in_pnl: pnl.length,
+    total_revenue_ex_vat: round2(totalRevenueExVat),
+    total_direct_cost: round2(totalDirectCost),
+    total_gross_profit: round2(totalGrossProfit),
+    total_gp_pct: totalRevenueExVat ? round4(totalGrossProfit / totalRevenueExVat) : 0,
+    opex_annual_budget: round2(opexBudget),
+    opex_daily_rate: round2(dailyOpex),
+    days_elapsed: daysElapsed,
+    opex_allocated_to_date: round2(opexToDate),
+    company_net_profit: round2(companyNetProfit),
+    company_net_profit_pct: totalRevenueExVat ? round4(companyNetProfit / totalRevenueExVat) : 0,
+    // break-even insight: GP/sales needed to cover the full annual overhead
+    annual_breakeven_gp: round2(opexBudget),
+    // reference totals (all projects)
+    all_contract_value: round2(rollups.reduce((a, r) => a + r.contract_value, 0)),
     vat_total: round2(totalVat),
-    gross_profit: round2(grossProfit),
-    net_profit: round2(netProfit),
-    remaining_ar: round2(rollups.reduce((a, r) => a + r.remaining_ar, 0)),
-    supplier_commitments: round2(rollups.reduce((a, r) => a + r.supplier_commitments, 0)),
+    // legacy aliases kept for existing screens
+    contract_value: round2(totalRevenueExVat),
+    gross_profit: round2(totalGrossProfit),
+    net_profit: round2(companyNetProfit),
+    overhead_opex: round2(opexToDate),
   };
   return { projects: rollups, totals };
 }

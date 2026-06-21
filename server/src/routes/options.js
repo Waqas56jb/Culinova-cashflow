@@ -9,10 +9,18 @@ import { nameTokens, matchProject } from '../utils/calc.js';
 const router = Router();
 router.use(requireAuth);
 
-const uniqSorted = (arr) =>
-  [...new Set(arr.map((x) => (x == null ? '' : String(x).trim())).filter(Boolean))].sort((a, b) =>
-    a.localeCompare(b)
-  );
+// unique + sorted, de-duplicated case/space-insensitively (one entry per name)
+const uniqSorted = (arr) => {
+  const map = new Map();
+  arr
+    .map((x) => (x == null ? '' : String(x).trim()))
+    .filter(Boolean)
+    .forEach((v) => {
+      const k = v.replace(/\s+/g, ' ').toLowerCase();
+      if (!map.has(k)) map.set(k, v);
+    });
+  return [...map.values()].sort((a, b) => a.localeCompare(b));
+};
 
 router.get('/', async (_req, res) => {
   try {

@@ -103,6 +103,10 @@ export default function ResourcePage({ config }) {
         }
         if (c.type === 'date' && payload[c.key] === '') payload[c.key] = null;
       });
+      // empty strings → null (fixes uuid/date/numeric columns rejecting "")
+      Object.keys(payload).forEach((k) => {
+        if (payload[k] === '') payload[k] = null;
+      });
       if (editing) await api.put(`${endpoint}/${editing.id}`, payload);
       else await api.post(endpoint, payload);
       toast.success(t('common.saved'));

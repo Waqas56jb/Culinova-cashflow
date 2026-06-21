@@ -443,18 +443,38 @@ export function simulatePurchase({ settings, reserve, collections, payments, rat
    control-tower metrics and procurement readiness per project.
    ============================================================ */
 
-const NAME_STOP = new Set([
-  'THE', 'AND', 'FOR', 'WITH', 'CARE', 'CENTER', 'CENTRE', 'HOTEL', 'PALACE',
-  'VILLA', 'EXTENDED', 'HOSPITAL', 'PROJECT', 'COMPANY', 'NEW', 'LTD',
-  'CLINIC', 'SCHOOL', 'SCHOOLS', 'RESTAURANT', 'LAUNDRIES', 'LAUNDRY',
-]);
+// Only true generic connectors — NOT words that identify a project
+// (e.g. "Schools", "Hospital", "Hotel" can be the actual project name/identity).
+const NAME_STOP = new Set(['THE', 'AND', 'FOR', 'WITH', 'NEW', 'LTD', 'COMPANY', 'PROJECT']);
 
 function nameTokens(name) {
-  return String(name || '')
+  const words = String(name || '')
     .toUpperCase()
     .replace(/[^A-Z0-9 ]/g, ' ')
     .split(/\s+/)
-    .filter((w) => w.length >= 4 && !NAME_STOP.has(w));
+    .filter(Boolean);
+  const filtered = words.filter((w) => w.length >= 3 && !NAME_STOP.has(w));
+  // never leave a project with zero tokens (e.g. single-word "SCHOOLS")
+  return filtered.length ? filtered : words.filter((w) => w.length >= 3);
+}
+
+// Pick the project a payment link refers to. Distinctive tokens (that appear
+// in only one project) outweigh shared ones like "HOSPITAL" or "PALACE".
+function matchProject(segment, projTok, freq) {
+  const nm = String(segment || '').toUpperCase();
+  let best = null;
+  let bestScore = 0;
+  for (const { p, tok } of projTok) {
+    let score = 0;
+    for (const t of tok) {
+      if (nm.includes(t)) score += (freq[t] === 1 ? 10 : 1) * t.length;
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      best = p;
+    }
+  }
+  return bestScore > 0 ? best : null;
 }
 
 // Map each project's status to an approximate delivery / installation %.
@@ -485,17 +505,17 @@ const OVERHEAD_CATEGORIES = new Set([
 //   "ZUHA/PRINCE"         -> 50% / 50% (equal split)
 //   "BARAYA:70, ZUHA:30"  -> 70% / 30% (explicit percentages)
 // Returns [{ name, weight }] (weights sum to 1) or null if no project matched.
-function parseAllocations(link, projTok) {
+function parseAllocations(link, projTok, freq) {
   const segs = String(link || '').split(/[,/]+/).map((s) => s.trim()).filter(Boolean);
   if (!segs.length) return null;
   const parsed = [];
   for (const seg of segs) {
     const m = seg.match(/^(.*?)[:=]\s*([\d.]+)\s*%?$/);
-    const nm = (m ? m[1] : seg).trim().toUpperCase();
+    const nm = (m ? m[1] : seg).trim();
     const weight = m ? Number(m[2]) : null;
-    const proj = projTok.find(({ tok }) => tok.some((t) => nm.includes(t)));
-    if (proj && !parsed.find((x) => x.name === proj.p.name)) {
-      parsed.push({ name: proj.p.name, weight });
+    const proj = matchProject(nm, projTok, freq);
+    if (proj && !parsed.find((x) => x.name === proj.name)) {
+      parsed.push({ name: proj.name, weight });
     }
   }
   if (!parsed.length) return null;
@@ -510,6 +530,9 @@ function parseAllocations(link, projTok) {
 export function computeProjectRollups({ projects, collections, payments, settings, rates }) {
   const base = settings?.base_currency || 'SAR';
   const projTok = projects.map((p) => ({ p, tok: nameTokens(p.name) }));
+  // token frequency across projects → distinctive tokens get priority in matching
+  const freq = {};
+  projTok.forEach(({ tok }) => tok.forEach((t) => (freq[t] = (freq[t] || 0) + 1)));
 
   // Accumulate DIRECT project cost per project (overhead excluded), with
   // multi-project allocation. Track total vs paid; capture company overhead.
@@ -525,7 +548,7 @@ export function computeProjectRollups({ projects, collections, payments, setting
       continue;
     }
     if (!DIRECT_COST_CATEGORIES.has(pay.category)) continue;
-    const allocs = parseAllocations(pay.project_link, projTok);
+    const allocs = parseAllocations(pay.project_link, projTok, freq);
     if (!allocs) {
       unallocatedDirect += amt; // a direct cost not tied to any known project
       continue;

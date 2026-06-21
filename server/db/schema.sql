@@ -111,7 +111,9 @@ create table if not exists payments (
   id                 uuid primary key default gen_random_uuid(),
   category           text,                    -- Supplier Payment|Salaries|Rent|Government Fees|...
   supplier           text,
-  amount             numeric default 0,
+  amount             numeric default 0,         -- NET amount (excluding VAT) — used for project profitability
+  vat_rate           numeric default 0,         -- VAT rate: 0 | 0.05 | 0.10 | 0.15 (VAT amount computed = amount * rate)
+  vat_amount         numeric default 0,         -- (legacy) VAT amount; now derived from amount * vat_rate
   currency           text default 'SAR',
   due_date           date,
   priority           text default 'Medium',   -- Critical|High|Medium|Low

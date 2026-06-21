@@ -39,14 +39,16 @@ export default function Profitability() {
       </p>
 
       {/* Company profit summary */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
         <Tile label="Total Contract" value={m(tt.contract_value)} />
-        <Tile label="Project Costs" value={m(tt.total_direct_cost)} tone="text-orange-600" />
+        <Tile label="Project Costs (excl. VAT)" value={m(tt.total_direct_cost)} tone="text-orange-600" />
         <Tile label="Gross Profit" value={m(tt.gross_profit)} tone="text-emerald-600" />
         <Tile label="Overhead (OPEX)" value={m(tt.overhead_opex)} tone="text-orange-600" />
         <Tile label="Net Profit" value={m(tt.net_profit)} tone={tt.net_profit < 0 ? 'text-red-600' : 'text-emerald-700'} />
+        <Tile label="VAT (tracked)" value={m(tt.vat_total)} tone="text-slate-600" />
       </div>
       <p className="text-xs text-slate-400">
+        Profitability uses NET amounts (excluding VAT); VAT is tracked separately for tax reporting.
         Net Profit = Gross Profit − Overhead (Salaries, Rent, Government Fees, Other Expenses,
         Commissions). Project Costs include direct supplier/logistics/installation payments only.
       </p>

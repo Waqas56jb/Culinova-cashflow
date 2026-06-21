@@ -13,6 +13,7 @@ import { crudRouter } from './utils/crud.js';
 import {
   deriveProject,
   deriveCollection,
+  derivePayment,
   deriveInventory,
   deriveSupplierLedger,
   deriveCustomerLedger,
@@ -43,7 +44,7 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/projects', projectsList);
 app.use('/api/projects', crudRouter('projects', { derive: deriveProject, orderBy: 'name', ascending: true }));
 app.use('/api/collections', crudRouter('collections', { derive: deriveCollection, orderBy: 'expected_date', ascending: true }));
-app.use('/api/payments', crudRouter('payments', { derive: (r) => r, orderBy: 'due_date', ascending: true }));
+app.use('/api/payments', crudRouter('payments', { derive: derivePayment, orderBy: 'due_date', ascending: true }));
 app.use('/api/inventory', crudRouter('inventory', { derive: deriveInventory }));
 app.use('/api/supplier-ledger', crudRouter('supplier_ledger', { derive: (r) => deriveSupplierLedger(r), orderBy: 'supplier', ascending: true }));
 app.use('/api/customer-ledger', crudRouter('customer_ledger', { derive: (r) => deriveCustomerLedger(r), orderBy: 'project_name', ascending: true }));

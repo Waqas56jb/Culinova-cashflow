@@ -75,7 +75,7 @@ export default function ResourcePage({ config }) {
       const payload = { ...form };
       columns.forEach((c) => {
         if (c.computed) return;
-        if (['number', 'money', 'percent', 'percent100'].includes(c.type)) {
+        if (['number', 'money', 'percent', 'percent100'].includes(c.type) || c.numeric) {
           payload[c.key] = payload[c.key] === '' ? null : Number(payload[c.key]);
         }
         if (c.type === 'date' && payload[c.key] === '') payload[c.key] = null;
@@ -133,6 +133,11 @@ export default function ResourcePage({ config }) {
       return (
         <span className={`pill ${v ? 'pill-green' : 'pill-critical'}`}>{v ? '✓' : '✗'}</span>
       );
+    // object-option select (e.g. VAT rate 0.15 -> "15%")
+    if (c.type === 'select' && c.options?.length && typeof c.options[0] === 'object') {
+      const found = c.options.find((o) => String(o.value) === String(v));
+      return found ? found.label : v ?? '—';
+    }
     if (c.pill && v) return <span className={statusPill[v] || 'pill pill-yellow'}>{v}</span>;
     return v ?? '—';
   };
@@ -274,57 +279,74 @@ export default function ResourcePage({ config }) {
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {columns
-            .filter((c) => !c.computed)
-            .map((c) => (
-              <div key={c.key} className={c.type === 'checkbox' ? 'flex items-center gap-2 pt-5' : ''}>
-                {c.type === 'checkbox' ? (
-                  <>
-                    <input
-                      type="checkbox"
-                      id={c.key}
-                      checked={!!form[c.key]}
-                      onChange={(e) => setForm({ ...form, [c.key]: e.target.checked })}
-                      className="w-4 h-4"
-                    />
-                    <label htmlFor={c.key} className="text-sm font-semibold text-slate-600">
-                      {c.label}
-                    </label>
-                  </>
-                ) : (
-                  <>
+            .filter((c) => !c.computed || c.compute)
+            .map((c) => {
+              // Read-only, live auto-calculated field (e.g. VAT amount, Total incl. VAT)
+              if (c.computed && c.compute) {
+                const val = c.compute(form);
+                const shown = c.type === 'money' ? money(val, displayCurrency, i18n.language) : `${val}`;
+                return (
+                  <div key={c.key}>
                     <label className="label">{c.label}</label>
-                    {c.type === 'select' ? (
-                      <select
-                        className="input"
-                        value={form[c.key] ?? ''}
-                        onChange={(e) => setForm({ ...form, [c.key]: e.target.value })}
-                      >
-                        <option value="">—</option>
-                        {c.options.map((o) => (
-                          <option key={o} value={o}>
-                            {o}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
+                    <input className="input bg-slate-50 font-semibold" value={shown} disabled readOnly />
+                  </div>
+                );
+              }
+              const isObjOpts = c.type === 'select' && c.options?.length && typeof c.options[0] === 'object';
+              return (
+                <div key={c.key} className={c.type === 'checkbox' ? 'flex items-center gap-2 pt-5' : ''}>
+                  {c.type === 'checkbox' ? (
+                    <>
                       <input
-                        className="input"
-                        type={
-                          c.type === 'date'
-                            ? 'date'
-                            : ['number', 'money', 'percent', 'percent100'].includes(c.type)
-                              ? 'number'
-                              : 'text'
-                        }
-                        step={c.type === 'percent' || c.type === 'percent100' ? '0.01' : 'any'}
-                        value={form[c.key] ?? ''}
-                        onChange={(e) => setForm({ ...form, [c.key]: e.target.value })}
+                        type="checkbox"
+                        id={c.key}
+                        checked={!!form[c.key]}
+                        onChange={(e) => setForm({ ...form, [c.key]: e.target.checked })}
+                        className="w-4 h-4"
                       />
-                    )}
-                  </>
-                )}
-              </div>
-            ))}
+                      <label htmlFor={c.key} className="text-sm font-semibold text-slate-600">
+                        {c.label}
+                      </label>
+                    </>
+                  ) : (
+                    <>
+                      <label className="label">{c.label}</label>
+                      {c.type === 'select' ? (
+                        <select
+                          className="input"
+                          value={form[c.key] ?? ''}
+                          onChange={(e) => setForm({ ...form, [c.key]: e.target.value })}
+                        >
+                          <option value="">—</option>
+                          {c.options.map((o) => {
+                            const opt = isObjOpts ? o : { label: o, value: o };
+                            return (
+                              <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      ) : (
+                        <input
+                          className="input"
+                          type={
+                            c.type === 'date'
+                              ? 'date'
+                              : ['number', 'money', 'percent', 'percent100'].includes(c.type)
+                                ? 'number'
+                                : 'text'
+                          }
+                          step={c.type === 'percent' || c.type === 'percent100' ? '0.01' : 'any'}
+                          value={form[c.key] ?? ''}
+                          onChange={(e) => setForm({ ...form, [c.key]: e.target.value })}
+                        />
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })}
         </div>
       </Modal>
     </div>

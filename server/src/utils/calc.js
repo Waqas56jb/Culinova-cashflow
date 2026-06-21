@@ -52,6 +52,19 @@ export function toBase(amount, currency, rates, base = 'SAR') {
   return r ? a * r : a; // fall back to raw amount if rate unknown
 }
 
+// VAT amount of a payment = net amount × VAT rate (rate: 0 | 0.05 | 0.10 | 0.15).
+export function vatOf(p) {
+  return (Number(p.amount) || 0) * (Number(p.vat_rate) || 0);
+}
+// A payment's NET amount (excl. VAT) — used for profitability.
+export function payNet(p, rates, base = 'SAR') {
+  return toBase(Number(p.amount) || 0, p.currency, rates, base);
+}
+// A payment's GROSS cash amount (net + VAT) — used for cash flow.
+export function payGross(p, rates, base = 'SAR') {
+  return toBase((Number(p.amount) || 0) + vatOf(p), p.currency, rates, base);
+}
+
 /* ---------- cash status (Excel rule, shared everywhere) ----------
    Green   > green       (default 300,000)
    Yellow  yellow..green  (150k..300k)
@@ -79,17 +92,21 @@ export function computeDashboard({
   const today = startOfDay(new Date());
   const in30 = addDays(today, 30);
 
-  const sumWindow = (rows, dateField) =>
-    rows.reduce((acc, r) => {
-      const d = parseDate(r[dateField]);
-      if (d && d >= today && d <= in30)
-        return acc + toBase(r.amount, r.currency, rates, base);
-      return acc;
-    }, 0);
+  const inWindow = (r, dateField) => {
+    const d = parseDate(r[dateField]);
+    return d && d >= today && d <= in30;
+  };
 
   const bank = Number(settings?.current_bank_balance) || 0;
-  const expectedCollections = sumWindow(collections, 'expected_date');
-  const expectedPayments = sumWindow(payments, 'due_date');
+  const expectedCollections = collections.reduce(
+    (acc, r) => (inWindow(r, 'expected_date') ? acc + toBase(r.amount, r.currency, rates, base) : acc),
+    0
+  );
+  // Payments are a cash outflow → use GROSS (net + VAT)
+  const expectedPayments = payments.reduce(
+    (acc, r) => (inWindow(r, 'due_date') ? acc + payGross(r, rates, base) : acc),
+    0
+  );
   const netCashPosition = bank + expectedCollections - expectedPayments;
 
   const thresholds = {
@@ -155,7 +172,7 @@ export function computeForecast({
     }, 0);
     const outflows = payments.reduce((acc, r) => {
       const d = parseDate(r.due_date);
-      return d && d >= ws && d < we ? acc + toBase(r.amount, r.currency, rates, base) : acc;
+      return d && d >= ws && d < we ? acc + payGross(r, rates, base) : acc; // gross cash out
     }, 0);
 
     const net = inflows - outflows;
@@ -250,6 +267,11 @@ export function deriveCollection(c) {
   }
   return { ...c, delay_days: delayDays };
 }
+export function derivePayment(p) {
+  const net = Number(p.amount) || 0;
+  const vat = net * (Number(p.vat_rate) || 0);
+  return { ...p, vat_amount: round2(vat), total_amount: round2(net + vat) }; // VAT auto-calculated from rate
+}
 export function deriveInventory(i) {
   const qty = Number(i.qty) || 0;
   const totalCost = qty * (Number(i.unit_cost) || 0);
@@ -322,10 +344,10 @@ export function computeCommitments({ settings, reserve, payments, collections, r
   const minOperating = Number(reserve?.min_operating_cash) || 0;
 
   const unpaid = payments.filter((p) => !p.paid);
-  const committedTotal = unpaid.reduce((a, p) => a + toBase(p.amount, p.currency, rates, base), 0);
+  const committedTotal = unpaid.reduce((a, p) => a + payGross(p, rates, base), 0);
   const committed30 = unpaid.reduce((a, p) => {
     const d = parseDate(p.due_date);
-    return d && d >= today && d <= in30 ? a + toBase(p.amount, p.currency, rates, base) : a;
+    return d && d >= today && d <= in30 ? a + payGross(p, rates, base) : a;
   }, 0);
   const expectedColl30 = collections.reduce((a, c) => {
     const d = parseDate(c.expected_date);
@@ -494,8 +516,10 @@ export function computeProjectRollups({ projects, collections, payments, setting
   const cost = new Map(projects.map((p) => [p.name, { total: 0, paid: 0 }]));
   let totalOverhead = 0;
   let unallocatedDirect = 0;
+  let totalVat = 0;
   for (const pay of payments) {
-    const amt = toBase(pay.amount, pay.currency, rates, base);
+    totalVat += toBase(vatOf(pay), pay.currency, rates, base); // VAT tracked separately (net × rate)
+    const amt = toBase(pay.amount, pay.currency, rates, base); // NET (excl. VAT) for profitability
     if (OVERHEAD_CATEGORIES.has(pay.category)) {
       totalOverhead += amt;
       continue;
@@ -619,6 +643,7 @@ export function computeProjectRollups({ projects, collections, payments, setting
     unallocated_direct_cost: round2(unallocatedDirect),
     total_direct_cost: round2(totalDirectCost),
     overhead_opex: round2(totalOverhead),
+    vat_total: round2(totalVat),
     gross_profit: round2(grossProfit),
     net_profit: round2(netProfit),
     remaining_ar: round2(rollups.reduce((a, r) => a + r.remaining_ar, 0)),

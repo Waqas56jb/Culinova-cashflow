@@ -12,6 +12,7 @@ import ControlTower from './pages/ControlTower.jsx';
 import ProjectHealth from './pages/ProjectHealth.jsx';
 import ProcurementReadiness from './pages/ProcurementReadiness.jsx';
 import MonthlyForecast from './pages/MonthlyForecast.jsx';
+import PaymentsPage from './pages/PaymentsPage.jsx';
 import Forecast from './pages/Forecast.jsx';
 import Reserve from './pages/Reserve.jsx';
 import Scenario from './pages/Scenario.jsx';
@@ -63,9 +64,12 @@ export default function App() {
         <Route path="reserve" element={<Reserve />} />
         <Route path="scenario" element={<Scenario />} />
         <Route path="settings" element={<Settings />} />
-        {Object.entries(RESOURCES).map(([key, cfg]) => (
-          <Route key={key} path={key} element={<ResourcePage config={cfg} />} />
-        ))}
+        <Route path="payments" element={<PaymentsPage />} />
+        {Object.entries(RESOURCES)
+          .filter(([key]) => key !== 'payments')
+          .map(([key, cfg]) => (
+            <Route key={key} path={key} element={<ResourcePage config={cfg} />} />
+          ))}
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

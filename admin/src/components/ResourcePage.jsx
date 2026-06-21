@@ -271,7 +271,9 @@ export default function ResourcePage({ config }) {
                     {c.label}
                   </th>
                 ))}
-                <th className="th text-right">{t('common.actions')}</th>
+                <th className="th text-right sticky ltr:right-0 rtl:left-0 bg-slate-50 shadow-[-6px_0_8px_-6px_rgba(15,23,42,0.15)]">
+                  {t('common.actions')}
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -295,7 +297,7 @@ export default function ResourcePage({ config }) {
                         {renderCell(row, c)}
                       </td>
                     ))}
-                    <td className="td">
+                    <td className="td sticky ltr:right-0 rtl:left-0 bg-white shadow-[-6px_0_8px_-6px_rgba(15,23,42,0.12)]">
                       <div className="flex justify-end gap-1">
                         {canWrite && (
                           <button

@@ -97,14 +97,29 @@ export function computeDashboard({
     return d && d >= today && d <= in30;
   };
 
-  const bank = Number(settings?.current_bank_balance) || 0;
-  const expectedCollections = collections.reduce(
-    (acc, r) => (inWindow(r, 'expected_date') ? acc + toBase(r.amount, r.currency, rates, base) : acc),
+  // LIVE balance: opening baseline − payments already PAID + collections already RECEIVED.
+  // Marking a payment Paid automatically deducts it here (settled cash).
+  const openingBase =
+    settings?.opening_bank_balance != null
+      ? Number(settings.opening_bank_balance)
+      : Number(settings?.current_bank_balance) || 0;
+  const paidToDate = payments.reduce((a, p) => (p.paid ? a + payGross(p, rates, base) : a), 0);
+  const receivedToDate = collections.reduce(
+    (a, c) => (c.actual_collection_date ? a + toBase(c.amount, c.currency, rates, base) : a),
     0
   );
-  // Payments are a cash outflow → use GROSS (net + VAT)
+  const bank = openingBase - paidToDate + receivedToDate;
+
+  // Expected = still-UNSETTLED items in the window (settled ones are already in `bank`)
+  const expectedCollections = collections.reduce(
+    (acc, r) =>
+      inWindow(r, 'expected_date') && !r.actual_collection_date
+        ? acc + toBase(r.amount, r.currency, rates, base)
+        : acc,
+    0
+  );
   const expectedPayments = payments.reduce(
-    (acc, r) => (inWindow(r, 'due_date') ? acc + payGross(r, rates, base) : acc),
+    (acc, r) => (inWindow(r, 'due_date') && !r.paid ? acc + payGross(r, rates, base) : acc),
     0
   );
   const netCashPosition = bank + expectedCollections - expectedPayments;
@@ -126,6 +141,9 @@ export function computeDashboard({
 
   return {
     base_currency: base,
+    opening_bank_balance: round2(openingBase),
+    paid_to_date: round2(paidToDate),
+    received_to_date: round2(receivedToDate),
     current_bank_balance: round2(bank),
     expected_collections_30d: round2(expectedCollections),
     expected_payments_30d: round2(expectedPayments),
@@ -159,20 +177,34 @@ export function computeForecast({
     red: Number(settings?.status_red ?? 100000),
   };
   const start = startOfWeek(parseDate(startDate || settings?.forecast_start_date) || new Date());
-  let opening = Number(settings?.current_bank_balance) || 0;
+  // Start from the LIVE balance (opening − paid + received); paid items are already
+  // settled, so the forecast only projects the still-unsettled flows below.
+  const openingBase =
+    settings?.opening_bank_balance != null
+      ? Number(settings.opening_bank_balance)
+      : Number(settings?.current_bank_balance) || 0;
+  const paid = payments.reduce((a, p) => (p.paid ? a + payGross(p, rates, base) : a), 0);
+  const received = collections.reduce(
+    (a, c) => (c.actual_collection_date ? a + toBase(c.amount, c.currency, rates, base) : a),
+    0
+  );
+  let opening = openingBase - paid + received;
 
   const weekRows = [];
   for (let i = 0; i < weeks; i++) {
     const ws = addDays(start, i * 7);
     const we = addDays(ws, 7);
 
+    // only still-UNSETTLED items (a Paid payment is removed from Outflows automatically)
     const inflows = collections.reduce((acc, r) => {
       const d = parseDate(r.expected_date);
-      return d && d >= ws && d < we ? acc + toBase(r.amount, r.currency, rates, base) : acc;
+      return d && d >= ws && d < we && !r.actual_collection_date
+        ? acc + toBase(r.amount, r.currency, rates, base)
+        : acc;
     }, 0);
     const outflows = payments.reduce((acc, r) => {
       const d = parseDate(r.due_date);
-      return d && d >= ws && d < we ? acc + payGross(r, rates, base) : acc; // gross cash out
+      return d && d >= ws && d < we && !r.paid ? acc + payGross(r, rates, base) : acc;
     }, 0);
 
     const net = inflows - outflows;
